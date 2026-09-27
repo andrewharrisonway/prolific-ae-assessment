@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: global_transactions
+    description: "Pre-built raw tables provided for the assessment"
+    schema: main
+    tables:
+      - name: transactions
+        description: "All platform transactions"
+      - name: client_contracts
+        description: "Client discount agreements"
+      - name: currency_rates
+        description: "Daily currency exchange rates"
+      - name: transaction_resolutions
+        description: "Chargeback resolution statuses"

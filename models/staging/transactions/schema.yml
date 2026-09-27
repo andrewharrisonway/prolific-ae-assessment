@@ -1,0 +1,86 @@
+version: 2
+
+models:
+  - name: stg_transactions__transactions
+    description: "Staged transactions, lightly cleaned/standardised from the raw `transactions` source table."
+    columns:
+      - name: transaction_id
+        description: "Unique transaction identifier."
+        tests:
+          - unique
+          - not_null
+          - dbt_utils.expression_is_true: # NB: this would normally be a regex test, but is limited by sqlite
+              arguments:
+                expression: "GLOB 'T[0-9][0-9][0-9][0-9][0-9][0-9]'"
+
+      - name: client_id
+        description: "Client identifier, FK to NAME CLIENT TABLE"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true: # NB: this would normally be a regex test, but is limited by sqlite
+              arguments:
+                expression: "GLOB 'C[0-9][0-9][0-9]'"
+
+      - name: transaction_amount
+        description: "Transaction amount in its original currency (see `currency`)."
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true: # ASSUMPTION: all transaction amounts are positive
+              arguments:
+                expression: "> 0"
+
+      - name: transaction_type
+        description: "Type of transaction."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['payment', 'refund', 'fraud', 'chargeback']
+
+      - name: transaction_date
+        description: "Date the transaction occurred."
+        tests:
+          - not_null # NB: captures dates that are nulled via the `date()` function for being malformed or missing
+
+      - name: platform_fee_margin
+        description: "Platform fee margin applied to this transaction."
+        tests:
+          - not_null
+
+          # Range: hard bound
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+                inclusive: true
+
+          # Range: soft bound
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0.1
+                max_value: 0.3
+                inclusive: true
+              config:
+                severity: warn
+
+      - name: transaction_currency
+        description: "Currency code for transaction_amount."
+        tests:
+          - not_null
+          # TO DO: add relationship test to currencies table
+
+      - name: linked_transaction_id
+        description: "For refunds, references the transaction_id of the original payment being refunded. Null for all other transaction types."
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "GLOB 'T[0-9][0-9][0-9][0-9][0-9][0-9]' or linked_transaction_id is null"
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "is not null or transaction_type != 'refund'"
+              config:
+                severity: warn
+          - relationships:
+              arguments:
+                to: ref('stg_transactions__transactions')
+                field: transaction_id
