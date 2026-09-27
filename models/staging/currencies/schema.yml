@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: stg_currencies__currency_rates
+    description: "Staged daily currency exchange rates, from the raw `currency_rates` source table. rate_to_gbp expresses how many GBP one unit of `currency` is worth on `rate_date`."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - currency
+              - rate_date
+
+    columns:
+      - name: currency
+        description: "ISO currency code."
+        tests:
+          - not_null
+
+      - name: rate_date
+        description: "Date this exchange rate applies to."
+        tests:
+          - not_null
+
+      - name: exchange_rate_to_gbp
+        description: "Multiplier to convert one unit of currency into GBP (e.g. amount_in_currency * exchange_rate_to_gbp = amount_in_gbp)."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 1
+                inclusive: true
+              config:
+                where: "currency = 'GBP'"
