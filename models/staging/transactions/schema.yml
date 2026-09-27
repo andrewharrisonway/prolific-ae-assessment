@@ -18,7 +18,7 @@ models:
         tests:
           - not_null
           - dbt_utils.expression_is_true: # NB: this would normally be a regex test, but is limited by sqlite
-              arguments:
+              arguments:                  # NB: this should live on a client dim table, but is here as none exists
                 expression: "GLOB 'C[0-9][0-9][0-9]'"
 
       - name: transaction_amount
@@ -72,15 +72,49 @@ models:
       - name: linked_transaction_id
         description: "For refunds, references the transaction_id of the original payment being refunded. Null for all other transaction types."
         tests:
-          - dbt_utils.expression_is_true:
-              arguments:
-                expression: "GLOB 'T[0-9][0-9][0-9][0-9][0-9][0-9]' or linked_transaction_id is null"
-          - dbt_utils.expression_is_true:
-              arguments:
-                expression: "is not null or transaction_type != 'refund'"
+          - not_null:
               config:
-                severity: warn
+                where: "transaction_type = 'refund'"
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "is null"
+              config:
+                where: "transaction_type != 'refund'"
           - relationships:
               arguments:
                 to: ref('stg_transactions__transactions')
                 field: transaction_id
+
+
+  - name: stg_transactions__transaction_resolutions
+    description: "Staged chargeback resolution statuses, from the raw `transaction_resolutions` source table."
+    columns:
+      - name: transaction_id
+        description: "References the transaction_id this resolution applies to."
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_transactions__transactions')
+                field: transaction_id
+
+      - name: resolution_status
+        description: "Chargeback resolution status."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['resolved', 'pending']
+
+      - name: resolution_date
+        description: "Date the chargeback was resolved. Null while resolution_status is 'pending'."
+        tests:
+          - not_null:
+              config:
+                where: "resolution_status = 'resolved'"
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "is null"
+              config:
+                where: "resolution_status = 'pending'"
