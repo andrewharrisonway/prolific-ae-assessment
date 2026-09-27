@@ -1,0 +1,8 @@
+.DS_Store
+.user.yml
+global_transactions.db
+dbt-env/
+logs/
+seeds/
+setup.md
+target/
