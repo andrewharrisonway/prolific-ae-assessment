@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: stg_customers__client_contracts
+    description: "Staged client discount agreements, from the raw `client_contracts` source table."
+    columns:
+      - name: client_id
+        description: "Client identifier this contract applies to."
+        tests:
+          - unique
+          - not_null
+          - dbt_utils.expression_is_true: # NB: this should live on a client dim table, but is here as none exists
+              arguments:
+                expression: "GLOB 'C[0-9][0-9][0-9]'"
+                # NB: this should have a relationship test to client table but none exists
+
+      - name: contract_start_date
+        description: "Date this contract took effect."
+        tests:
+          - not_null
+
+      - name: contract_duration_months
+        description: "Length of the contract in months."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+
+      - name: spend_threshold
+        description: "Spend threshold associated with this contract's discount tier."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+
+      - name: discounted_fee_margin
+        description: "Contracted fee margin for this client (replaces or discounts the platform base margin — confirm exact semantics against requirements before use downstream)."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+                inclusive: true

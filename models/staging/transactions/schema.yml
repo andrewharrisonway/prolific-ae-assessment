@@ -19,7 +19,7 @@ models:
           - not_null
           - dbt_utils.expression_is_true: # NB: this would normally be a regex test, but is limited by sqlite
               arguments:                  # NB: this should live on a client dim table, but is here as none exists
-                expression: "GLOB 'C[0-9][0-9][0-9]'"
+                expression: "GLOB 'C[0-9][0-9][0-9]'" # NB: this should have a relationship test to client table but none exists
 
       - name: transaction_amount
         description: "Transaction amount in its original currency (see `currency`)."
@@ -67,7 +67,10 @@ models:
         description: "Currency code for transaction_amount."
         tests:
           - not_null
-          # TO DO: add relationship test to currencies table
+          - relationships:
+              arguments:
+                to: ref('stg_currencies__currency_rates') # NB: would normally point to currency dim table
+                field: currency
 
       - name: linked_transaction_id
         description: "For refunds, references the transaction_id of the original payment being refunded. Null for all other transaction types."
