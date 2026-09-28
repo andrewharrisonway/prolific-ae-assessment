@@ -29,7 +29,7 @@ models:
                 inclusive: false
 
       - name: spend_threshold
-        description: "Spend threshold associated with this contract's discount tier."
+        description: "Spend threshold associated with this contract's discount tier." # ASSUMPTION: these values are in GBP.  I tried to intuit this from the transactions table but all clients had a mix of both USD and GBP.
         tests:
           - not_null
           - dbt_utils.accepted_range:
@@ -38,7 +38,7 @@ models:
                 inclusive: false
 
       - name: discounted_fee_margin
-        description: "Contracted fee margin for this client (replaces or discounts the platform base margin — confirm exact semantics against requirements before use downstream)."
+        description: "Contracted fee margin for this client once reaching spend threshold (`spend_threshold`)."
         tests:
           - not_null
           - dbt_utils.accepted_range:

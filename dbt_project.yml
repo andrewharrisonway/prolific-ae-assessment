@@ -20,10 +20,10 @@ models:
   global_transactions:
     staging:
       +materialized: table
-      +schema: staging
+      # +schema: staging # commented out as SQLite does not have true schema support 
     intermediate:
-      +materialized: table
-      +schema: intermediate
+      +materialized: view
+      # +schema: intermediate # commented out as SQLite does not have true schema support 
     marts:
       +materialized: table
-      +schema: marts
+      # +schema: marts # commented out as SQLite does not have true schema support 
