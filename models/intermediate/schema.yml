@@ -1,6 +1,35 @@
 version: 2
 
 models:
+  - name: int__client_contracts
+    description: "One row per client contract, with its end date. Defines the contract window once for every model that needs it."
+    columns:
+      - name: client_id
+        description: "{{ doc('client_id') }} Primary key of this model."
+        tests:
+          - unique
+          - not_null
+
+      - name: contract_start_date
+        description: "{{ doc('contract_start_date') }} Passed through from staging, where it is tested."
+
+      - name: contract_duration_months
+        description: "{{ doc('contract_duration_months') }} Passed through from staging, where it is tested."
+
+      - name: spend_threshold
+        description: "{{ doc('spend_threshold') }} Passed through from staging, where it is tested."
+
+      - name: discounted_fee_margin
+        description: "{{ doc('discounted_fee_margin') }} Passed through from staging, where it is tested."
+
+      - name: contract_end_date
+        description: "Date the contract ends (exclusive): `contract_start_date` plus `contract_duration_months` months."
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> contract_start_date"
+
   - name: int__transactions
     description: "One row per transaction, converted to GBP, with contract discounts applied and revenue calculated. Transaction type behaviour comes from the `transaction_types` seed."
     tests:
@@ -30,20 +59,20 @@ models:
         description: "{{ doc('amount_direction') }} From the `transaction_types` seed, where it is tested; the relationships test in staging guarantees every transaction type has a match."
 
       - name: gross_amount_local
-        description: "Amount as recorded, in the original currency (staging's `transaction_amount`, renamed). Always positive; tested in staging."
+        description: "{{ doc('gross_amount_local') }} Staging's `transaction_amount`, renamed; tested in staging."
 
       - name: net_amount_local
-        description: "Signed amount in the original currency (`gross_amount_local * amount_direction`)."
+        description: "{{ doc('net_amount_local') }}"
         tests:
           - not_null
 
       - name: gross_amount_gbp
-        description: "Recorded amount converted to GBP at the latest rate on or before the transaction date."
+        description: "{{ doc('gross_amount_gbp') }}"
         tests:
           - not_null
 
       - name: net_amount_gbp
-        description: "Signed amount in GBP. Negative for refunds, positive otherwise."
+        description: "{{ doc('net_amount_gbp') }}"
         tests:
           - not_null
           - dbt_utils.expression_is_true:
@@ -61,7 +90,7 @@ models:
         description: "{{ doc('is_duplicate_refund') }} Passed through from staging, where it is set and tested."
 
       - name: is_revenue_recognised
-        description: "1 if this transaction generates revenue: the type recognises revenue, nothing is outstanding (chargebacks must be resolved), and it is not a duplicate refund."
+        description: "{{ doc('is_revenue_recognised') }}"
         tests:
           - not_null
           - accepted_values:
@@ -70,7 +99,7 @@ models:
                 quote: false
 
       - name: is_spend_qualifying
-        description: "1 if this transaction's type and status count toward cumulative contract spend; duplicate refunds never count. Contract rules are applied afterwards, when spend is accumulated: only transactions inside the contract window count, and a refund only counts if the payment it reverses was inside the window."
+        description: "{{ doc('is_spend_qualifying') }}"
         tests:
           - not_null
           - accepted_values:
@@ -79,7 +108,7 @@ models:
                 quote: false
 
       - name: applicable_fee_margin
-        description: "Fee margin applied: the contracted discounted margin once the spend threshold is reached within the contract term, otherwise the platform fee margin."
+        description: "{{ doc('applicable_fee_margin') }}"
         tests:
           - not_null
           - dbt_utils.accepted_range:
@@ -88,8 +117,54 @@ models:
                 max_value: 1
                 inclusive: true
 
+      - name: resolution_status
+        description: "{{ doc('resolution_status') }} Null for transactions that need no resolution. Passed through from staging, where it is tested."
+
+      - name: resolution_date
+        description: "{{ doc('resolution_date') }} Also null for transactions that need no resolution. Passed through from staging, where it is tested."
+
+      - name: recognition_date
+        description: "{{ doc('recognition_date') }}"
+        tests:
+          - not_null:
+              config:
+                where: "is_revenue_recognised = 1"
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "is null"
+              config:
+                where: "is_revenue_recognised = 0"
+
+      - name: spend_effective_date
+        description: "{{ doc('spend_effective_date') }}"
+        tests:
+          - not_null
+
+      - name: is_in_contract_period
+        description: "{{ doc('is_in_contract_period') }}"
+        tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+
+      - name: contract_spend_gbp
+        description: "{{ doc('contract_spend_gbp') }}"
+        tests:
+          - not_null:
+              config:
+                where: "is_in_contract_period IS NOT NULL"
+
+      - name: is_discount_earned
+        description: "{{ doc('is_discount_earned') }}"
+        tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+
       - name: revenue_gbp
-        description: "Platform revenue in GBP: `net_amount_gbp * applicable_fee_margin` when `is_revenue_recognised`, otherwise 0."
+        description: "{{ doc('revenue_gbp') }}"
         tests:
           - not_null
           - dbt_utils.expression_is_true:

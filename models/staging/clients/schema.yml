@@ -9,18 +9,18 @@ models:
         tests:
           - unique
           - not_null
-          - dbt_utils.expression_is_true: # NB: this should live on a client dim table, but is here as none exists
+          # NB: data quality gap. The source supplies no client master data, so client IDs can only be checked for format, not for existence. With a client list, this would be a relationships test to it.
+          - dbt_utils.expression_is_true: # NB: GLOB, as SQLite has no regex
               arguments:
                 expression: "GLOB 'C[0-9][0-9][0-9]'"
-                # NB: this should have a relationship test to client table but none exists
 
       - name: contract_start_date
-        description: "Date this contract took effect."
+        description: "{{ doc('contract_start_date') }}"
         tests:
           - not_null
 
       - name: contract_duration_months
-        description: "Length of the contract in months."
+        description: "{{ doc('contract_duration_months') }}"
         tests:
           - not_null
           - dbt_utils.accepted_range:
@@ -29,7 +29,7 @@ models:
                 inclusive: false
 
       - name: spend_threshold
-        description: "Cumulative spend a client must reach within the contract term for the discounted fee margin to apply. ASSUMPTION: in GBP. The contracts table does not state a currency, and every client transacts in both GBP and USD."
+        description: "{{ doc('spend_threshold') }}"
         tests:
           - not_null
           - dbt_utils.accepted_range:
@@ -38,7 +38,7 @@ models:
                 inclusive: false
 
       - name: discounted_fee_margin
-        description: "Contracted fee margin for this client once reaching spend threshold (`spend_threshold`)."
+        description: "{{ doc('discounted_fee_margin') }}"
         tests:
           - not_null
 

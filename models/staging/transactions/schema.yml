@@ -23,9 +23,10 @@ models:
         description: "{{ doc('client_id') }} Contracts are in `stg_clients__client_contracts`."
         tests:
           - not_null
-          - dbt_utils.expression_is_true: # NB: this would normally be a regex test, but is limited by sqlite
-              arguments:                  # NB: this should live on a client dim table, but is here as none exists
-                expression: "GLOB 'C[0-9][0-9][0-9]'" # NB: this should have a relationship test to client table but none exists
+          # NB: data quality gap. The source supplies no client master data, so client IDs can only be checked for format, not for existence. With a client list, this would be a relationships test to it.
+          - dbt_utils.expression_is_true: # NB: GLOB, as SQLite has no regex
+              arguments:
+                expression: "GLOB 'C[0-9][0-9][0-9]'"
 
       - name: transaction_amount
         description: "Transaction amount in its original currency (see `transaction_currency`)."
@@ -74,9 +75,10 @@ models:
         description: "{{ doc('transaction_currency') }}"
         tests:
           - not_null
+          # NB: data quality gap. The source supplies no currency reference data, so currencies are checked against those that have exchange rates.
           - relationships:
               arguments:
-                to: ref('stg_currencies__currency_rates') # NB: would normally point to currency dim table
+                to: ref('stg_currencies__currency_rates')
                 field: currency
 
       - name: linked_transaction_id
@@ -129,7 +131,7 @@ models:
                 to_condition: "transaction_type = 'chargeback'"
 
       - name: resolution_status
-        description: "Chargeback resolution status."
+        description: "{{ doc('resolution_status') }}"
         tests:
           - not_null
           - accepted_values:
@@ -137,7 +139,7 @@ models:
                 values: ['resolved', 'pending']
 
       - name: resolution_date
-        description: "Date the chargeback was resolved. Null while resolution_status is 'pending'."
+        description: "{{ doc('resolution_date') }} Converted from `dd/mm/yyyy` to an ISO date."
         tests:
           - not_null:
               config:
