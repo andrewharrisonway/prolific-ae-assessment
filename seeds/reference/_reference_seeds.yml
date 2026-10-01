@@ -45,7 +45,7 @@ seeds:
                 quote: false
 
       - name: requires_resolution
-        description: "1 if this type only counts once resolved (see `stg_transactions__transaction_resolutions`)."
+        description: "1 if this type only counts once resolved (see `stg_global_transactions__transaction_resolutions`)."
         tests:
           - not_null
           - accepted_values:

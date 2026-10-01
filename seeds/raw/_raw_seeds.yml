@@ -2,7 +2,8 @@ version: 2
 
 # These seeds stand in for an extract-and-load tool (e.g. Fivetran): `dbt seed`
 # loads the raw assessment data into the warehouse, and models read it through
-# `source()` (see models/raw/sources.yml), never `ref()`.
+# `source()` (see models/staging/global_transactions/_global_transactions__sources.yml),
+# never `ref()`.
 #
 # Column types are pinned so the raw tables match the data as delivered:
 # without them, seed type inference would parse dates (including the
