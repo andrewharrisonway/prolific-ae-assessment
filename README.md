@@ -37,7 +37,7 @@ Run `dbt seed` before `dbt build`. Models read the raw tables through `source()`
 The brief supplies the raw data as dbt seeds. Seeds are intended for small, static reference data, and in production raw data would arrive through an extract-and-load tool rather than dbt. To keep the models production-shaped:
 
 - `seeds/raw/` stands in for that load step: `dbt seed` lands the four raw tables in the warehouse, with column types pinned so they match the data as delivered.
-- Models only read raw data through `source()` (declared in `models/raw/sources.yml`), never `ref()`. Swapping the seeds for a real loader would need no model changes.
+- Models only read raw data through `source()` (declared in `models/staging/global_transactions/_global_transactions__sources.yml`), never `ref()`. Swapping the seeds for a real loader would need no model changes.
 - `seeds/reference/` holds genuine seed data: the `transaction_types` business rules.
 
 ## Project structure
@@ -50,11 +50,10 @@ macros/
 └── sqlite__hash.sql   makes surrogate keys work on SQLite, which has no md5()
 models/
 ├── docs/           shared column descriptions (dbt doc blocks), used across the yml files
-├── raw/            sources.yml: declares the raw tables loaded from seeds/raw/
-├── staging/        one model per source: typing, renaming, date fixes, tests
-│   ├── currencies/
-│   ├── clients/
-│   └── transactions/
+├── staging/
+│   └── global_transactions/   one folder per source system: the source definition
+│                              (_global_transactions__sources.yml), one staging model
+│                              per raw table, and their tests (_global_transactions__models.yml)
 ├── intermediate/   int__client_contracts: contract windows
 │                   int__transactions: GBP conversion, contract discounts, revenue per transaction
 └── marts/          dim_dates, fct_transactions, fct_client_monthly_revenue, semantic layer
@@ -69,13 +68,16 @@ tests/              singular tests: daily exchange rates, monthly mart reconcili
 
 ### Lineage
 
+Each raw table passes through its staging model first (omitted for clarity).
+
 ```
 transactions ─────────────┐
 transaction_resolutions ──┤
-currency_rates ───────────┼──► int__transactions ──► fct_transactions ──► fct_client_monthly_revenue
-transaction_types (seed) ─┘          ▲                                     ▲  ▲
-client_contracts ──► int__client_contracts ────────────────────────────────┘  │
-                                     int__transactions ──► dim_dates ─────────┘
+currency_rates ───────────┼──► int__transactions ──► fct_transactions ──┐
+transaction_types (seed) ─┘          ▲                                  │
+client_contracts ──► int__client_contracts ─────────────────────────────┼──► fct_client_monthly_revenue
+                                                                        │
+dim_dates (fixed spine, no parents) ────────────────────────────────────┘
 ```
 
 ## Marts
@@ -84,7 +86,7 @@ client_contracts ──► int__client_contracts ──────────�
 |---|---|---|
 | `fct_client_monthly_revenue` | client × month | The deliverable: monthly revenue recognition, GMV in GBP, spend threshold tracking and discount status |
 | `fct_transactions` | transaction | Transaction-level fact behind the monthly mart and the semantic layer |
-| `dim_dates` | day | Date spine generated from the data: the month spine for the mart and the MetricFlow time spine |
+| `dim_dates` | day | Fixed date spine, 2020 to 2030 (set by project vars): the month spine for the mart and the MetricFlow time spine |
 
 **Every client appears in every month** (January to July 2024), so months without activity still show, and running totals carry forward. July is flagged `is_partial_month`: the data ends on 6 July, and the month contains only refunds and chargeback resolutions.
 
@@ -130,8 +132,8 @@ Every refund links to a payment from the same client, in the same currency, for 
 Six payments are refunded more than once (one of them three times): 7 refunds in total, worth £175,166 of GMV and £35,033 of revenue. Because every refund is for the full payment amount, a second refund of the same payment cannot be genuine, so:
 
 - Only the first refund of each payment (by date, then transaction ID) counts.
-- Later refunds are flagged `is_duplicate_refund` in staging (`stg_transactions__transactions`), which describes the source data without filtering it. `int__transactions` then excludes flagged refunds from revenue and contract spend. The rows are kept, so the exclusion is visible and can be reported.
-- A `unique` test on `linked_transaction_id` in staging catches payments refunded more than once. It is set to warn, because the raw data does contain these duplicates.
+- Later refunds are flagged `is_duplicate_refund` in staging (`stg_global_transactions__transactions`), which describes the source data without filtering it. `int__transactions` then excludes flagged refunds from revenue and contract spend. The rows are kept, so the exclusion is visible and can be reported.
+- A `unique` test on `linked_transaction_id` in staging catches payments refunded more than once. It accepts the 6 known payments (`warn_if` / `error_if: "> 6"`) and fails if any new duplicate appears. It also stores the failing rows (`store_failures`), so the known duplicates can be queried in the `main_dbt_test__audit` schema (`target/main_dbt_test__audit.db`).
 
 ### Currency conversion
 
@@ -156,7 +158,7 @@ Six payments are refunded more than once (one of them three times): 7 refunds in
 
 ## Known findings
 
-- **Duplicate refunds:** 6 payments were refunded more than once; the 7 extra refunds are excluded (see Duplicate refunds above). `dbt build` reports this as one expected warning.
+- **Duplicate refunds:** 6 payments were refunded more than once; the 7 extra refunds are excluded (see Duplicate refunds above). The test on refund links accepts these 6 and fails on any new ones.
 - **No client or currency reference data.** The source supplies no client master data and no currency list. Client IDs can only be validated by format, not checked against a list of real clients, and currencies are checked against those that have exchange rates. This is treated as a data quality gap in what was supplied: a client dimension is deliberately not deduced from transaction data, because a list built from the transactions would always agree with them and so could never catch an unknown client.
 - **No discount triggers during the period of observation.** No contracted client reaches its spend threshold within the data provided, so the discounted margin is never applied. The logic is implemented as I understand the business rules, rather than adjusted to make the discount trigger. Because that seemed odd, I also tried a more naive calculation: every transaction in the contract window at its gross amount, whatever its type. It does reach the threshold, for C001 and C002 in June 2024, and it is exposed in `fct_client_monthly_revenue` (`naive_cumulative_gross_spend_gbp`, `is_naive_threshold_reached`) for comparison. It works, but I don't defend it from a business standpoint: it counts fraud and refunds as spend.
 

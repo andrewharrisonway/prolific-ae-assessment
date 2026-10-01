@@ -37,6 +37,10 @@ unit_tests:
     given:
       - input: ref('fct_transactions')
         rows:
+          # payments before and after the contract: outside the window, so no contract spend
+          - {transaction_id: P0, client_id: C001, transaction_date: '2024-01-15', recognition_date: '2024-01-15', spend_effective_date: '2024-01-15', amount_direction: 1, gross_amount_gbp: 100.5, net_amount_gbp: 100.5, is_revenue_recognised: 1, is_in_contract_period: 0, contract_spend_gbp: 0, is_discount_earned: 0, revenue_gbp: 25.125}
+          - {transaction_id: P2, client_id: C001, transaction_date: '2024-03-15', recognition_date: '2024-03-15', spend_effective_date: '2024-03-15', amount_direction: 1, gross_amount_gbp: 100.5, net_amount_gbp: 100.5, is_revenue_recognised: 1, is_in_contract_period: 0, contract_spend_gbp: 0, is_discount_earned: 0, revenue_gbp: 25.125}
+          # inside the contract: reaches the 500 threshold
           - {transaction_id: P1, client_id: C001, transaction_date: '2024-02-10', recognition_date: '2024-02-10', spend_effective_date: '2024-02-10', amount_direction: 1, gross_amount_gbp: 600.5, net_amount_gbp: 600.5, is_revenue_recognised: 1, is_in_contract_period: 1, contract_spend_gbp: 600.5, is_discount_earned: 1, revenue_gbp: 75.0625}
       - input: ref('dim_dates')
         rows:

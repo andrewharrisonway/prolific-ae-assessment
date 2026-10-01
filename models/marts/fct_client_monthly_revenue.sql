@@ -45,8 +45,9 @@ transactions AS (
 /*
 LOGIC/CHOICES:
 
-One row per client per month, for every month in dim_dates, so months without
-activity still appear and running totals carry forward.
+One row per client per month, for every month the data covers (from the first
+transaction to the last activity), so months without activity still appear and
+running totals carry forward.
 
 Two bases for the same recognised transactions:
 - Recognised: revenue lands in the month it is recognised (resolution month
@@ -61,6 +62,33 @@ NB: the source supplies no client master data, so the clients reported are
 those that appear in the transactions.
 */
 
+, data_coverage AS (
+    SELECT
+        MIN(transaction_date) AS data_start_date
+        , MAX(
+            MAX(transaction_date), MAX(COALESCE(resolution_date, ''))
+        ) AS data_end_date
+    FROM
+        transactions
+)
+
+, reporting_months AS (
+    -- NOTE: dim_dates is a fixed, wide spine; report only the months the data
+    -- covers
+    SELECT
+        mth.month_start_date
+        , mth.month_end_date
+    FROM
+        months AS mth
+    INNER JOIN
+        data_coverage AS dcv
+        ON
+            mth.month_start_date
+            >= DATE(dcv.data_start_date, 'start of month')
+            AND mth.month_start_date
+            <= DATE(dcv.data_end_date, 'start of month')
+)
+
 , clients AS (
     SELECT DISTINCT client_id
     FROM
@@ -70,12 +98,12 @@ those that appear in the transactions.
 , client_months AS (
     SELECT
         cln.client_id
-        , mth.month_start_date
-        , mth.month_end_date
+        , rmo.month_start_date
+        , rmo.month_end_date
     FROM
         clients AS cln
     CROSS JOIN
-        months AS mth
+        reporting_months AS rmo
 )
 
 , recognised_by_month AS (
@@ -177,15 +205,6 @@ those that appear in the transactions.
         is_discount_earned = 1
     GROUP BY
         client_id
-)
-
-, data_coverage AS (
-    SELECT
-        MAX(
-            MAX(transaction_date), MAX(COALESCE(resolution_date, ''))
-        ) AS data_end_date
-    FROM
-        transactions
 )
 
 , client_months_combined AS (
