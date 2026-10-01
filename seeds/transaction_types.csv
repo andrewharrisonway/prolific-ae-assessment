@@ -1,0 +1,5 @@
+transaction_type,amount_direction,recognises_revenue,counts_toward_spend,requires_resolution
+payment,1,1,1,0
+refund,-1,1,1,0
+chargeback,1,1,1,1
+fraud,1,0,0,0

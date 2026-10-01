@@ -1,0 +1,54 @@
+version: 2
+
+seeds:
+  - name: transaction_types
+    description: "Business rules for each transaction type: which way money moves, and whether the type counts toward revenue and contract spend. Adding or changing a transaction type is a change to this file, not to model logic."
+    config:
+      column_types:
+        transaction_type: varchar(12)
+        amount_direction: integer
+        recognises_revenue: integer
+        counts_toward_spend: integer
+        requires_resolution: integer
+    columns:
+      - name: transaction_type
+        description: "Transaction type, as it appears in `stg_transactions__transactions`."
+        tests:
+          - unique
+          - not_null
+
+      - name: amount_direction
+        description: "Sign applied to the recorded amount: 1 for money in, -1 for money returned (refunds). Fraud is 1 but excluded from revenue and spend by the flags below."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, -1]
+                quote: false
+
+      - name: recognises_revenue
+        description: "1 if this type generates platform revenue."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+
+      - name: counts_toward_spend
+        description: "1 if this type counts toward a client's cumulative contract spend."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+
+      - name: requires_resolution
+        description: "1 if this type only counts once resolved (see `stg_transactions__transaction_resolutions`)."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
