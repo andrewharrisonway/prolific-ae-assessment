@@ -5,9 +5,10 @@ models:
     description: "One row per transaction, converted to GBP, with contract discounts applied and revenue calculated. Transaction type behaviour comes from the `transaction_types` seed."
     columns:
       - name: transaction_id
-        description: "Unique transaction identifier. Passed through from staging (not_null tested there); uniqueness is retested because this model joins to other tables."
+        description: "Unique transaction identifier; primary key of this model."
         tests:
           - unique
+          - not_null
 
       - name: transaction_date
         description: "Date the transaction occurred. Passed through from staging, where it is tested."

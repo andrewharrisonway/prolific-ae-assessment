@@ -184,7 +184,7 @@ Any `ASSUMPTION:` that affects outputs also belongs in the README.
 
 Every model has an entry in its folder's `schema.yml` with a model description and a description for every column.
 
-- **Primary key:** `unique` + `not_null`.
+- **Primary key:** `unique` + `not_null`, on every model, in every layer, always. This is the one exception to the pass-through rule below.
 - **Foreign keys:** `relationships` tests. Where the target dimension doesn't exist, point at the nearest model and add an `NB:` comment.
 - **Conditional rules** use `config: where:`, e.g. `linked_transaction_id` is `not_null` only where `transaction_type = 'refund'`.
 - **Ranges:** use a hard bound at `error` severity for impossible values, and a soft bound at `severity: warn` for unusual but possible values.
@@ -199,8 +199,8 @@ Every model has an entry in its folder's `schema.yml` with a model description a
   ```
 - **Test a column once, where it is created or changed.** A column passed through unchanged from a lower layer, where it is already tested, is not tested again downstream; renaming it doesn't count as a change. Retest it only if the model processes it: casting, calculating, aggregating, or deriving it through a join, such as a lookup or a conversion. Repeating upstream tests adds run time and noise without catching anything new, and it hides which tests guard which logic. Still give passed-through columns a description.
   - *Example:* `transaction_type` is tested in staging and passed through `int__transactions` unchanged, so it isn't retested there. `net_amount_gbp` is calculated in `int__transactions`, so it is tested there.
-  - *Exception, the grain:* always test `unique` on a model's primary key, even when the key is passed through. Joins can fan out rows, so uniqueness at the new model's grain is never inherited.
-- **Intermediate and mart models need tests on what they create:** uniqueness of the grain, not-null on calculated measures (e.g. `net_amount_gbp`), and row-count or reconciliation checks against the upstream model. Logic with thresholds or windows (cumulative spend, discount trigger) should get dbt unit tests with small hand-built fixtures.
+  - *Exception, primary keys:* always test a model's primary key for `unique` and `not_null`, even when it is passed through unchanged. The primary key defines the model's grain, and every model must prove its own grain: joins can fan out rows, and filters or unions can introduce gaps, so neither property is inherited from the layer below.
+- **Intermediate and mart models need tests on what they create:** `unique` and `not_null` on the primary key, not-null on calculated measures (e.g. `net_amount_gbp`), and row-count or reconciliation checks against the upstream model. Logic with thresholds or windows (cumulative spend, discount trigger) should get dbt unit tests with small hand-built fixtures.
 
 ## Workflow
 
