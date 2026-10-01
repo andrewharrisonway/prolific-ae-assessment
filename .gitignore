@@ -4,6 +4,5 @@ global_transactions.db
 dbt-env/
 dbt_packages/
 logs/
-seeds/
 setup.md
 target/

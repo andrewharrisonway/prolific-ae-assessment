@@ -9,13 +9,6 @@ The original brief is in [task_instructions.md](task_instructions.md).
 ### Prerequisites
 
 - Python 3.11
-- **SQLite ≥ 3.48.** The intermediate layer uses the multi-argument `IF()` function, which was added in SQLite 3.48. `dbt-sqlite` uses the SQLite library that is bundled with your Python, not one installed via pip, so check it before running anything:
-
-  ```bash
-  python -c "import sqlite3; print(sqlite3.sqlite_version)"
-  ```
-
-  On an older version, `dbt build` still succeeds (SQLite does not validate functions when a view is created), but querying `int__transactions` fails with `no such function: IF`. Python installs managed by [uv](https://docs.astral.sh/uv/) ship a recent SQLite and are the simplest fix.
 
 ### Setup
 
@@ -41,6 +34,8 @@ The raw source tables live in the pre-built database at `target/global_transacti
 ## Project structure
 
 ```
+seeds/
+└── transaction_types.csv   business rules per transaction type (see below)
 models/
 ├── raw/            sources.yml: the four pre-built raw tables
 ├── staging/        one model per source: typing, renaming, date fixes, tests
@@ -63,19 +58,30 @@ models/
 transactions ─────────────┐
 transaction_resolutions ──┤
 currency_rates ───────────┼──► int__transactions ──► (marts)
-client_contracts ─────────┘
+client_contracts ─────────┤
+transaction_types (seed) ─┘
 ```
 
 ## Business logic and assumptions
 
 ### Transaction types
 
-| Type | Revenue | Counts towards contract spend |
-|---|---|---|
-| `payment` | Positive | Yes |
-| `refund` | Negative (amount is negated) | Yes, reduces spend |
-| `fraud` | Excluded (zero) | No |
-| `chargeback` | Positive, **only once resolved**; pending chargebacks contribute zero | Yes, from the resolution date |
+How each transaction type behaves is defined as data in the [`transaction_types`](seeds/transaction_types.csv) seed, not in model logic:
+
+| Type | `amount_direction` | `recognises_revenue` | `counts_toward_spend` | `requires_resolution` |
+|---|---|---|---|---|
+| `payment` | 1 | 1 | 1 | 0 |
+| `refund` | -1 | 1 | 1 | 0 |
+| `chargeback` | 1 | 1 | 1 | 1 |
+| `fraud` | 1 | 0 | 0 | 0 |
+
+- Refunds are negated, so they reduce both revenue and contract spend.
+- Fraud contributes nothing to revenue or spend.
+- Chargebacks count only once resolved, and towards spend from their resolution date. Pending chargebacks contribute zero.
+
+`int__transactions` keeps both the recorded amount (`gross_amount_*`, always positive) and the signed amount (`net_amount_*`). Revenue is `net_amount_gbp × applicable_fee_margin × is_revenue_recognised`.
+
+With four types, a seed is more structure than strictly needed. It is used deliberately: the business rules sit in one reviewable file, the staging model validates transaction types against it, and adding or changing a type becomes a data change rather than a logic change.
 
 All refunds link to a payment from the same client, in the same currency, for no more than the original amount. Chargebacks have no linked transaction and are treated as standalone events.
 
