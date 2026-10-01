@@ -1,0 +1,96 @@
+version: 2
+
+# Semantic layer (MetricFlow) definitions on fct_transactions.
+#
+# NB: MetricFlow cannot query SQLite, so these definitions are validated by
+# `dbt parse` but cannot be run here. They show how the additive measures would
+# be defined once and sliced by any dimension (client, type, currency, month)
+# without building a new mart for each question. Stateful measures (contract
+# spend against threshold, discount status, pending chargebacks at month end)
+# are not simple aggregates, so they stay in fct_client_monthly_revenue.
+
+semantic_models:
+  - name: transactions
+    description: "Platform transactions, one row per transaction. Revenue measures are aggregated by the date they are recognised by default."
+    model: ref('fct_transactions')
+    defaults:
+      agg_time_dimension: recognition_date
+
+    entities:
+      - name: transaction
+        type: primary
+        expr: transaction_id
+      - name: client
+        type: foreign
+        expr: client_id
+
+    dimensions:
+      - name: transaction_type
+        type: categorical
+      - name: transaction_currency
+        type: categorical
+      - name: is_duplicate_refund
+        type: categorical
+      - name: recognition_date
+        type: time
+        type_params:
+          time_granularity: day
+      - name: transaction_date
+        type: time
+        type_params:
+          time_granularity: day
+
+    measures:
+      - name: revenue_gbp
+        description: "Platform revenue in GBP."
+        agg: sum
+      - name: net_gmv_gbp
+        description: "Recognised money in less refunds, in GBP."
+        agg: sum
+        expr: "CASE WHEN is_revenue_recognised = 1 THEN net_amount_gbp ELSE 0 END"
+      - name: gross_gmv_gbp
+        description: "Recognised money in (payments and resolved chargebacks), in GBP, before refunds."
+        agg: sum
+        expr: "CASE WHEN is_revenue_recognised = 1 AND amount_direction = 1 THEN gross_amount_gbp ELSE 0 END"
+      - name: transaction_count
+        description: "Number of transactions, by the date they happened."
+        agg: count
+        expr: transaction_id
+        agg_time_dimension: transaction_date
+
+metrics:
+  - name: revenue
+    label: "Revenue (GBP)"
+    description: "Platform revenue in GBP, by recognition date."
+    type: simple
+    type_params:
+      measure: revenue_gbp
+
+  - name: net_gmv
+    label: "Net GMV (GBP)"
+    description: "Recognised GMV after refunds, in GBP."
+    type: simple
+    type_params:
+      measure: net_gmv_gbp
+
+  - name: gross_gmv
+    label: "Gross GMV (GBP)"
+    description: "Recognised GMV before refunds, in GBP."
+    type: simple
+    type_params:
+      measure: gross_gmv_gbp
+
+  - name: take_rate
+    label: "Take rate"
+    description: "Revenue as a share of net GMV."
+    type: ratio
+    type_params:
+      numerator: revenue
+      denominator: net_gmv
+
+  - name: transactions
+    label: "Transactions"
+    description: "Number of transactions, by transaction date."
+    type: simple
+    type_params:
+      measure: transaction_count

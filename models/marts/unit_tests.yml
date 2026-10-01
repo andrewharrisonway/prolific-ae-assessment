@@ -1,0 +1,54 @@
+version: 2
+
+# Amounts are chosen to be exact in floating point and never whole numbers:
+# dbt casts expected values with SQLite's numeric affinity, which would turn an
+# expected 100.0 into 100 and fail the comparison against the model's 100.0.
+# Every expected row lists the same columns, since dbt combines them with UNION ALL.
+
+unit_tests:
+  - name: chargeback_recognised_in_resolution_month
+    description: "A chargeback counts toward recognised revenue in the month it resolves, toward originated revenue in the month it happened, and is pending at every month end in between. A chargeback that never resolves is pending but never recognised."
+    model: fct_client_monthly_revenue
+    given:
+      - input: ref('fct_transactions')
+        rows:
+          # a payment, recognised immediately
+          - {transaction_id: P1, client_id: C005, transaction_date: '2024-01-10', recognition_date: '2024-01-10', spend_effective_date: '2024-01-10', amount_direction: 1, gross_amount_gbp: 100.5, net_amount_gbp: 100.5, is_revenue_recognised: 1, revenue_gbp: 25.125}
+          # a chargeback in January, resolved in February
+          - {transaction_id: CB1, client_id: C005, transaction_date: '2024-01-20', resolution_status: resolved, resolution_date: '2024-02-05', recognition_date: '2024-02-05', spend_effective_date: '2024-02-05', amount_direction: 1, gross_amount_gbp: 200.25, net_amount_gbp: 200.25, is_revenue_recognised: 1, revenue_gbp: 50.0625}
+          # a chargeback in January, still pending
+          - {transaction_id: CB2, client_id: C005, transaction_date: '2024-01-25', resolution_status: pending, spend_effective_date: '2024-01-25', amount_direction: 1, gross_amount_gbp: 150.5, net_amount_gbp: 150.5, is_revenue_recognised: 0, revenue_gbp: 0}
+      - input: ref('dim_dates')
+        rows:
+          - {date_day: '2024-01-15', month_start_date: '2024-01-01', month_end_date: '2024-01-31'}
+          - {date_day: '2024-02-15', month_start_date: '2024-02-01', month_end_date: '2024-02-29'}
+      - input: ref('int__client_contracts')
+        rows: []
+    expect:
+      rows:
+        # January: only the payment is recognised; both chargebacks are pending
+        - {client_id: C005, month_start_date: '2024-01-01', recognised_net_gmv_gbp: 100.5, recognised_revenue_gbp: 25.125, originated_net_gmv_gbp: 300.75, originated_revenue_gbp: 75.1875, pending_chargebacks_gbp: 350.75, is_partial_month: 0, contract_status: no contract}
+        # February: the resolved chargeback is recognised; data ends 5 Feb, so the month is partial
+        - {client_id: C005, month_start_date: '2024-02-01', recognised_net_gmv_gbp: 200.25, recognised_revenue_gbp: 50.0625, originated_net_gmv_gbp: 0, originated_revenue_gbp: 0, pending_chargebacks_gbp: 150.5, is_partial_month: 1, contract_status: no contract}
+
+  - name: contract_status_and_discount_tracking
+    description: "Contract status and discount are reported as at each month end: not started before the contract, active (with the discount once earned) during it, ended after it, with contract spend carried forward."
+    model: fct_client_monthly_revenue
+    given:
+      - input: ref('fct_transactions')
+        rows:
+          - {transaction_id: P1, client_id: C001, transaction_date: '2024-02-10', recognition_date: '2024-02-10', spend_effective_date: '2024-02-10', amount_direction: 1, gross_amount_gbp: 600.5, net_amount_gbp: 600.5, is_revenue_recognised: 1, is_in_contract_period: 1, contract_spend_gbp: 600.5, is_discount_earned: 1, revenue_gbp: 75.0625}
+      - input: ref('dim_dates')
+        rows:
+          - {date_day: '2024-01-15', month_start_date: '2024-01-01', month_end_date: '2024-01-31'}
+          - {date_day: '2024-02-15', month_start_date: '2024-02-01', month_end_date: '2024-02-29'}
+          - {date_day: '2024-03-15', month_start_date: '2024-03-01', month_end_date: '2024-03-31'}
+      - input: ref('int__client_contracts')
+        rows:
+          - {client_id: C001, contract_start_date: '2024-02-01', contract_end_date: '2024-03-01', spend_threshold: 500}
+    expect:
+      rows:
+        - {client_id: C001, month_start_date: '2024-01-01', contract_status: not started, cumulative_contract_spend_gbp: 0, discount_earned_date: null, is_discount_active: 0}
+        - {client_id: C001, month_start_date: '2024-02-01', contract_status: active, cumulative_contract_spend_gbp: 600.5, discount_earned_date: '2024-02-10', is_discount_active: 1}
+        # the contract ended on 1 March: discount off, spend carried forward
+        - {client_id: C001, month_start_date: '2024-03-01', contract_status: ended, cumulative_contract_spend_gbp: 600.5, discount_earned_date: '2024-02-10', is_discount_active: 0}
