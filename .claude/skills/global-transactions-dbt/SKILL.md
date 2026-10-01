@@ -208,6 +208,6 @@ Use the project venv (`source dbt-env/bin/activate`; setup is in the README). Af
 3. `sqlfluff lint <path>` on changed files.
 4. If a business rule changed, update `README.md`.
 
-**Never run `dbt clean`.** `target/` is in `clean-targets`, and the source data lives in `target/global_transactions.db`; cleaning deletes it.
+**Raw data comes from `seeds/raw/`, but models read it through `source()`, never `ref()`.** Those seeds stand in for an extract-and-load tool. Genuine reference data (e.g. `transaction_types`) lives in `seeds/reference/` and is read with `ref()`. On a fresh database, run `dbt seed` before `dbt build`, because sources create no dependency on the seeds. `target/global_transactions.db` is disposable: `dbt clean` deletes it (and installed packages); `dbt deps` then `dbt seed` rebuilds it.
 
 Layer materialisations are set in `dbt_project.yml` (staging: table, intermediate: view, marts: table). Don't override them per model without a stated reason.
