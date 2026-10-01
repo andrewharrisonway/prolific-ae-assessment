@@ -10,7 +10,7 @@ client_contracts AS (
         , spend_threshold
         , discounted_fee_margin
     FROM
-        {{ ref('stg_clients__client_contracts') }}
+        {{ ref('stg_global_transactions__client_contracts') }}
 )
 
 /* TRANSFORMATIONS */

@@ -14,7 +14,7 @@ transactions AS (
         , linked_transaction_id
         , is_duplicate_refund
     FROM
-        {{ ref('stg_transactions__transactions') }}
+        {{ ref('stg_global_transactions__transactions') }}
 )
 
 , currency_rates AS (
@@ -23,7 +23,7 @@ transactions AS (
         , rate_date
         , exchange_rate_to_gbp
     FROM
-        {{ ref('stg_currencies__currency_rates') }}
+        {{ ref('stg_global_transactions__currency_rates') }}
 )
 
 , client_contracts AS (
@@ -43,7 +43,7 @@ transactions AS (
         , resolution_status
         , resolution_date
     FROM
-        {{ ref('stg_transactions__transaction_resolutions') }}
+        {{ ref('stg_global_transactions__transaction_resolutions') }}
 )
 
 , transaction_types AS (

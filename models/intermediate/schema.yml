@@ -35,7 +35,7 @@ models:
     tests:
       - dbt_utils.equal_rowcount: # one row per staged transaction: catches joins that fan out or drop rows
           arguments:
-            compare_model: ref('stg_transactions__transactions')
+            compare_model: ref('stg_global_transactions__transactions')
     columns:
       - name: transaction_id
         description: "{{ doc('transaction_id') }} Primary key of this model."
