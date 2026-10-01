@@ -55,25 +55,52 @@ models/
 │   ├── currencies/
 │   ├── clients/
 │   └── transactions/
-├── intermediate/   int__transactions: GBP conversion, contract discounts, revenue per transaction
-└── marts/          monthly revenue by client (in progress)
+├── intermediate/   int__client_contracts: contract windows
+│                   int__transactions: GBP conversion, contract discounts, revenue per transaction
+└── marts/          dim_dates, fct_transactions, fct_client_monthly_revenue, semantic layer
+tests/              singular tests: daily exchange rates, monthly mart reconciliation
 ```
 
 | Layer | Materialisation | Purpose |
 |---|---|---|
 | staging | table | Clean and type each source; the bulk of data quality testing lives here |
 | intermediate | view | Transaction-grain business logic |
-| marts | table | Reporting outputs |
+| marts | table | Reporting outputs: facts (`fct_`) and dimensions (`dim_`) |
 
 ### Lineage
 
 ```
 transactions ─────────────┐
 transaction_resolutions ──┤
-currency_rates ───────────┼──► int__transactions ──► (marts)
-client_contracts ─────────┤
-transaction_types (seed) ─┘
+currency_rates ───────────┼──► int__transactions ──► fct_transactions ──► fct_client_monthly_revenue
+transaction_types (seed) ─┘          ▲                                     ▲  ▲
+client_contracts ──► int__client_contracts ────────────────────────────────┘  │
+                                     int__transactions ──► dim_dates ─────────┘
 ```
+
+## Marts
+
+| Model | Grain | Purpose |
+|---|---|---|
+| `fct_client_monthly_revenue` | client × month | The deliverable: monthly revenue recognition, GMV in GBP, spend threshold tracking and discount status |
+| `fct_transactions` | transaction | Transaction-level fact behind the monthly mart and the semantic layer |
+| `dim_dates` | day | Date spine generated from the data: the month spine for the mart and the MetricFlow time spine |
+
+**Every client appears in every month** (January to July 2024), so months without activity still show, and running totals carry forward. July is flagged `is_partial_month`: the data ends on 6 July, and the month contains only refunds and chargeback resolutions.
+
+**Revenue is reported on two bases**, over the same recognised transactions:
+
+- **Recognised** (`recognised_*`), the headline: revenue lands in the month it is recognised, which for chargebacks is the month they resolve. A closed month never changes.
+- **Originated** (`originated_*`): revenue lands in the month the transaction happened, counting chargebacks resolved as of the latest data, so past months are restated as chargebacks resolve.
+- `pending_chargebacks_gbp` shows chargebacks still unresolved at each month end. Per client, the two bases total to the same figures; a singular test checks this against `fct_transactions`.
+
+**GMV** is reported gross (money in: payments and resolved chargebacks) and net (after refunds). Fraud, pending chargebacks and duplicate refunds are excluded from both.
+
+**Spend threshold tracking and discount status** are as at each month end: contract status (`no contract`, `not started`, `active`, `ended`), contract spend for the month and to date, progress towards the threshold, the date the threshold was reached, and whether the discount is active.
+
+### Semantic layer
+
+`models/marts/semantic_models.yml` defines MetricFlow measures and metrics on `fct_transactions`: revenue, net and gross GMV, take rate and transaction count, by recognition or transaction date, sliceable by client, type and currency. This shows how the additive measures would be defined once, so any slice can be queried without a new mart. MetricFlow cannot query SQLite, so the definitions are validated by `dbt parse` but cannot be run here. Stateful measures (contract spend against threshold, discount status, pending chargebacks at month end) are not simple aggregates, so they live in `fct_client_monthly_revenue`.
 
 ## Business logic and assumptions
 
@@ -110,6 +137,7 @@ Six payments are refunded more than once (one of them three times): 7 refunds in
 
 - All amounts are converted to GBP using the latest available rate **on or before** the transaction date.
 - Exchange rates end on 2024-06-30 but transactions run into July 2024, so the last available rate is carried forward.
+- Chargebacks are converted at the rate on their transaction date, even when their revenue is recognised later, in the month they resolve.
 - Refunds are converted at the rate on the refund date, not the original payment's rate. The client is refunded the full amount in the currency they paid, so the GBP cost of the refund is whatever that amount is worth on the day. Any difference from exchange-rate movement between payment and refund is treated as a cost of doing business, not something to pass on to the client. In this data, USD payment and refund pairs leave a net +£1,486 of GMV (+£297 revenue) from rate movement.
 
 ### Contract discounts
@@ -129,7 +157,8 @@ Six payments are refunded more than once (one of them three times): 7 refunds in
 ## Known findings
 
 - **Duplicate refunds:** 6 payments were refunded more than once; the 7 extra refunds are excluded (see Duplicate refunds above). `dbt build` reports this as one expected warning.
-- **No discount triggers during the period of observation.** No contracted client reaches its spend threshold within the data provided, so the discounted margin is never applied. The logic is implemented as I understand the business rules, rather than adjusted to make the discount trigger. A naive gross-GMV measure (all transaction types summed) does cross the threshold for C001 and C002; this will be exposed in the mart for comparison but is not the recommended definition.
+- **No client or currency reference data.** The source supplies no client master data and no currency list. Client IDs can only be validated by format, not checked against a list of real clients, and currencies are checked against those that have exchange rates. This is treated as a data quality gap in what was supplied: a client dimension is deliberately not deduced from transaction data, because a list built from the transactions would always agree with them and so could never catch an unknown client.
+- **No discount triggers during the period of observation.** No contracted client reaches its spend threshold within the data provided, so the discounted margin is never applied. The logic is implemented as I understand the business rules, rather than adjusted to make the discount trigger. Because that seemed odd, I also tried a more naive calculation: every transaction in the contract window at its gross amount, whatever its type. It does reach the threshold, for C001 and C002 in June 2024, and it is exposed in `fct_client_monthly_revenue` (`naive_cumulative_gross_spend_gbp`, `is_naive_threshold_reached`) for comparison. It works, but I don't defend it from a business standpoint: it counts fraud and refunds as spend.
 
 ## Testing
 
@@ -139,6 +168,8 @@ Tests are defined in each layer's `schema.yml` and run with `dbt build` or `dbt 
 - Relationships between transactions, refunds, resolutions and currencies
 - Conditional rules, e.g. only refunds have a linked transaction, and only resolved chargebacks have a resolution date
 - Hard and soft (warning) ranges on fee margins and exchange rates
+- Unit tests (`unit_tests.yml` in `intermediate/` and `marts/`) on small hand-built fixtures, for logic the real data never exercises: the discount crossing the threshold and expiring, refunds of pre-contract payments, chargebacks moving between months, and contract and discount status by month
+- Singular tests in `tests/`: exchange rates are daily with no gaps, and the monthly mart reconciles to `fct_transactions`
 
 SQL style is enforced with SQLFluff (`.sqlfluff`):
 
@@ -150,6 +181,7 @@ sqlfluff lint models
 
 - [x] Staging models and tests
 - [x] Intermediate transaction model
-- [ ] Recognise chargeback revenue in the month of resolution
-- [ ] Monthly revenue mart: revenue by client and month, GMV in GBP, spend threshold tracking, discount status
-- [ ] Tests on the intermediate and mart layers
+- [x] Recognise chargeback revenue in the month of resolution
+- [x] Monthly revenue mart: revenue by client and month, GMV in GBP, spend threshold tracking, discount status
+- [x] Tests on the intermediate and mart layers
+- [x] Semantic layer definitions

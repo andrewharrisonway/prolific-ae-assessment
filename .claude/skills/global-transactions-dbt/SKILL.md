@@ -152,12 +152,15 @@ Column aliases (`AS transaction_amount_gbp`) are a separate thing: always use `A
 |---|---|---|
 | Staging model | `stg_<source_area>__<table>` | `stg_transactions__transaction_resolutions` |
 | Intermediate model | `int__<entity>` | `int__transactions` |
-| Mart model | `fct_<grain>` / `dim_<entity>` (proposed, confirm with the user before first use) | `fct_client_monthly_revenue` |
+| Mart fact | `fct_<grain>`: events or measures at a stated grain | `fct_client_monthly_revenue`, `fct_transactions` |
+| Mart dimension | `dim_<entity>`: one row per entity, descriptive attributes | `dim_dates` |
 | Staging folder | one per source area | `models/staging/transactions/` |
 | Money columns | suffix with currency basis | `transaction_amount_local`, `revenue_gbp` |
 | Booleans | `is_` / `has_` prefix | `is_in_contract_period`, `is_discount_earned` |
 | Dates | `_date` suffix | `transaction_date`, `resolution_date` |
 | Keys | `_id` suffix | `client_id`, `linked_transaction_id` |
+
+Use `fct_`/`dim_` only in marts. Staging and intermediate keep `stg_`/`int__`: they hold source cleaning and reusable logic, not reporting outputs.
 
 Use the business's vocabulary: these are **clients**, not customers.
 
@@ -173,6 +176,9 @@ The warehouse is SQLite, which shapes several choices:
 - **No date_trunc or regex.** Use `DATE(d, 'start of month')` for month buckets, `DATE(d, '+N months')` for offsets, and `GLOB` patterns for format tests.
 - **Types are affinities.** `CAST(x AS numeric(8, 2))` doesn't enforce precision; keep the precision anyway as documentation, but make it valid (precision ≥ scale) so it ports to another warehouse.
 - **No hash functions.** SQLite has no `md5()`, so `macros/sqlite__hash.sql` overrides the adapter's hash: on SQLite, surrogate keys are the readable input string (e.g. `GBP-2024-01-01`), and other adapters still use md5. Always generate keys with `dbt_utils.generate_surrogate_key`, never by concatenating columns by hand, so they stay portable.
+- **Give every text column a declared type.** Any text column produced by an expression (`CASE`, `COALESCE`, `MIN`, `DATE()`) has no declared type unless wrapped in `CAST(... AS text)`, and dbt unit-test fixtures then cast its values numerically (dates become `2024`, `'active'` becomes `0`). Numeric expressions are fine untyped.
+- **Beware integer division.** `600 / 500` is `1` in SQLite; `CAST(x AS real)` one side when dividing columns that could both be whole.
+- **Unit test expected rows must all list the same columns**, since dbt combines them with `UNION ALL`; use `null` where a value is not asserted. Expected values that are whole numbers lose their `.0`, so prefer non-whole fixture amounts.
 - **Cast dates to text: `CAST(DATE(x) AS text)`.** SQLite stores dates as ISO text. A bare `DATE(x)` column has no declared type, so dbt unit-test fixtures cast it as `UNKNOWN` and SQLite turns `'2024-01-01'` into the number `2024`. Never `CAST(x AS date)` either: that has numeric affinity and does the same.
 - **Check dbt_utils tests that do date arithmetic.** `dbt_utils.sequential_values` cannot work on SQLite (its `CAST(... AS timestamp)` reduces dates to their year, so it never fails). Confirm a new generic test can actually fail before relying on it.
 - **No schemas.** Everything lands in `main`; layers are separated by folder and name prefix only.
@@ -182,7 +188,7 @@ The warehouse is SQLite, which shapes several choices:
 Use these comment prefixes so decisions are searchable:
 
 - `-- ASSUMPTION:` something taken as true without evidence in the data (e.g. spend thresholds are in GBP).
-- `-- NB:` a known limitation or a compromise forced by the setup (e.g. a test that belongs on a dim table that doesn't exist).
+- `-- NB:` a known limitation or a compromise forced by the setup or the data (e.g. a check limited by a data quality gap in what the source supplies).
 - `-- NOTE:` an explanation of a non-obvious implementation choice.
 
 Any `ASSUMPTION:` that affects outputs also belongs in the README.
@@ -194,7 +200,7 @@ Every model has an entry in its folder's `schema.yml` with a model description a
 **Write a shared description once, as a doc block.** When a column is described in more than one place, its description lives in `models/docs/columns.md` (modelled layers) or `models/docs/raw_columns.md` (raw data as delivered), and each yml references it with `doc()`. Add model-specific context after the block, e.g. `"{{ doc('transaction_id') }} Primary key of this model."` or `"{{ doc('client_id') }} Passed through from staging, where it is tested."`. A description used in one place only stays inline. Copies of the same description drift apart over time; a doc block can't.
 
 - **Primary key:** `unique` + `not_null`, on every model, in every layer, always. This is the one exception to the pass-through rule below.
-- **Foreign keys:** `relationships` tests. Where the target dimension doesn't exist, point at the nearest model and add an `NB:` comment.
+- **Foreign keys:** `relationships` tests. Where the source supplies no reference data to test against (e.g. no client master data), don't deduce a stand-in from the data being tested, since it would always agree with it; use the strongest check available and add an `NB:` comment naming it as a data quality gap.
 - **Conditional rules** use `config: where:`, e.g. `linked_transaction_id` is `not_null` only where `transaction_type = 'refund'`.
 - **Ranges:** use a hard bound at `error` severity for impossible values, and a soft bound at `severity: warn` for unusual but possible values.
 - **Generic test arguments go under `arguments:`** (dbt ≥ 1.10 syntax), matching existing tests:
