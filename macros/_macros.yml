@@ -1,0 +1,9 @@
+version: 2
+
+macros:
+  - name: sqlite__hash
+    description: "SQLite override of dbt's `hash`, used by `dbt_utils.generate_surrogate_key`. SQLite has no built-in `md5()` (it needs a loadable extension), so on SQLite the key is the concatenated input string itself, unhashed: deterministic, unique per input and readable (e.g. `GBP-2024-01-01`). Other adapters ignore this macro and use their own md5 hash."
+    arguments:
+      - name: field
+        type: string
+        description: "SQL expression for the value to hash; `generate_surrogate_key` passes the concatenated key columns."

@@ -21,6 +21,23 @@ seeds:
         platform_fee_margin: real
         currency: text
         linked_transaction_id: text
+    columns:
+      - name: transaction_id
+        description: "{{ doc('raw__transaction_id') }}"
+      - name: client_id
+        description: "{{ doc('raw__client_id') }}"
+      - name: transaction_amount
+        description: "{{ doc('raw__transaction_amount') }}"
+      - name: transaction_type
+        description: "{{ doc('raw__transaction_type') }}"
+      - name: transaction_date
+        description: "{{ doc('raw__transaction_date') }}"
+      - name: platform_fee_margin
+        description: "{{ doc('raw__platform_fee_margin') }}"
+      - name: currency
+        description: "{{ doc('raw__currency') }}"
+      - name: linked_transaction_id
+        description: "{{ doc('raw__linked_transaction_id') }}"
 
   - name: client_contracts
     description: "Raw client discount agreements. Read via source('global_transactions', 'client_contracts')."
@@ -31,6 +48,17 @@ seeds:
         contract_duration_months: int
         spend_threshold: int
         discounted_fee_margin: real
+    columns:
+      - name: client_id
+        description: "{{ doc('raw__client_id') }}"
+      - name: contract_start_date
+        description: "{{ doc('raw__contract_start_date') }}"
+      - name: contract_duration_months
+        description: "{{ doc('raw__contract_duration_months') }}"
+      - name: spend_threshold
+        description: "{{ doc('raw__spend_threshold') }}"
+      - name: discounted_fee_margin
+        description: "{{ doc('raw__discounted_fee_margin') }}"
 
   - name: currency_rates
     description: "Raw daily currency exchange rates. Read via source('global_transactions', 'currency_rates')."
@@ -39,6 +67,13 @@ seeds:
         currency: text
         rate_date: text
         exchange_rate_to_gbp: real
+    columns:
+      - name: currency
+        description: "{{ doc('raw__currency') }}"
+      - name: rate_date
+        description: "{{ doc('raw__rate_date') }}"
+      - name: exchange_rate_to_gbp
+        description: "{{ doc('raw__exchange_rate_to_gbp') }}"
 
   - name: transaction_resolutions
     description: "Raw chargeback resolution statuses. Read via source('global_transactions', 'transaction_resolutions')."
@@ -47,3 +82,10 @@ seeds:
         transaction_id: text
         resolution_status: text
         resolution_date: text
+    columns:
+      - name: transaction_id
+        description: "{{ doc('raw__resolution_transaction_id') }}"
+      - name: resolution_status
+        description: "{{ doc('raw__resolution_status') }}"
+      - name: resolution_date
+        description: "{{ doc('raw__resolution_date') }}"

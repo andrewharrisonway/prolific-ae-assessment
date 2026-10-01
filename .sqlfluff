@@ -16,5 +16,6 @@ extended_capitalisation_policy = upper
 
 [sqlfluff:rules:capitalisation.literals]
 capitalisation_policy = upper
+
 [sqlfluff:rules:references.consistent]
 single_table_references = unqualified

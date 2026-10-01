@@ -5,20 +5,20 @@ seeds:
     description: "Business rules for each transaction type: which way money moves, and whether the type counts toward revenue and contract spend. Adding or changing a transaction type is a change to this file, not to model logic."
     config:
       column_types:
-        transaction_type: varchar(12)
-        amount_direction: integer
-        recognises_revenue: integer
-        counts_toward_spend: integer
-        requires_resolution: integer
+        transaction_type: text
+        amount_direction: int
+        recognises_revenue: int
+        counts_toward_spend: int
+        requires_resolution: int
     columns:
       - name: transaction_type
-        description: "Transaction type, as it appears in `stg_transactions__transactions`."
+        description: "{{ doc('transaction_type') }} Primary key of this seed."
         tests:
           - unique
           - not_null
 
       - name: amount_direction
-        description: "Sign applied to the recorded amount: 1 for money in, -1 for money returned (refunds). Fraud is 1 but excluded from revenue and spend by the flags below."
+        description: "{{ doc('amount_direction') }}"
         tests:
           - not_null
           - accepted_values:

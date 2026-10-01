@@ -191,6 +191,8 @@ Any `ASSUMPTION:` that affects outputs also belongs in the README.
 
 Every model has an entry in its folder's `schema.yml` with a model description and a description for every column.
 
+**Write a shared description once, as a doc block.** When a column is described in more than one place, its description lives in `models/docs/columns.md` (modelled layers) or `models/docs/raw_columns.md` (raw data as delivered), and each yml references it with `doc()`. Add model-specific context after the block, e.g. `"{{ doc('transaction_id') }} Primary key of this model."` or `"{{ doc('client_id') }} Passed through from staging, where it is tested."`. A description used in one place only stays inline. Copies of the same description drift apart over time; a doc block can't.
+
 - **Primary key:** `unique` + `not_null`, on every model, in every layer, always. This is the one exception to the pass-through rule below.
 - **Foreign keys:** `relationships` tests. Where the target dimension doesn't exist, point at the nearest model and add an `NB:` comment.
 - **Conditional rules** use `config: where:`, e.g. `linked_transaction_id` is `not_null` only where `transaction_type = 'refund'`.

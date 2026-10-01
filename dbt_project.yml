@@ -1,6 +1,7 @@
 name: 'global_transactions'
 version: '1.0.0'
 config-version: 2
+require-dbt-version: [">=1.11.0", "<2.0.0"] # unit tests need >=1.8; test `arguments:` syntax needs >=1.10
 
 profile: 'global_transactions'
 

@@ -5,7 +5,7 @@ models:
     description: "Staged transactions, lightly cleaned/standardised from the raw `transactions` source table."
     columns:
       - name: transaction_id
-        description: "Unique transaction identifier."
+        description: "{{ doc('transaction_id') }}"
         tests:
           - unique
           - not_null
@@ -20,7 +20,7 @@ models:
                 where: "transaction_type = 'chargeback'"
 
       - name: client_id
-        description: "Client identifier. There is no client dimension; contracts exist for some clients only (see `stg_clients__client_contracts`)."
+        description: "{{ doc('client_id') }} Contracts are in `stg_clients__client_contracts`."
         tests:
           - not_null
           - dbt_utils.expression_is_true: # NB: this would normally be a regex test, but is limited by sqlite
@@ -36,7 +36,7 @@ models:
                 expression: "> 0"
 
       - name: transaction_type
-        description: "Type of transaction."
+        description: "{{ doc('transaction_type') }}"
         tests:
           - not_null
           - relationships: # NB: valid types and their behaviour are defined in the transaction_types seed
@@ -45,7 +45,7 @@ models:
                 field: transaction_type
 
       - name: transaction_date
-        description: "Date the transaction occurred."
+        description: "{{ doc('transaction_date') }}"
         tests:
           - not_null # NB: captures dates that are nulled via the `date()` function for being malformed or missing
 
@@ -71,7 +71,7 @@ models:
                 severity: warn
 
       - name: transaction_currency
-        description: "Currency code for transaction_amount."
+        description: "{{ doc('transaction_currency') }}"
         tests:
           - not_null
           - relationships:
@@ -101,7 +101,7 @@ models:
 
 
       - name: is_duplicate_refund
-        description: "1 for a refund of a payment that has already been refunded. Every refund is for the full payment amount, so only the first refund of a payment (by date, then transaction_id) is genuine. Flagged rather than filtered; int__transactions excludes flagged rows from revenue and spend."
+        description: "{{ doc('is_duplicate_refund') }}"
         tests:
           - not_null
           - accepted_values:

@@ -49,6 +49,7 @@ seeds/
 macros/
 └── sqlite__hash.sql   makes surrogate keys work on SQLite, which has no md5()
 models/
+├── docs/           shared column descriptions (dbt doc blocks), used across the yml files
 ├── raw/            sources.yml: declares the raw tables loaded from seeds/raw/
 ├── staging/        one model per source: typing, renaming, date fixes, tests
 │   ├── currencies/

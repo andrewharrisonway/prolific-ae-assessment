@@ -5,7 +5,7 @@ models:
     description: "Staged client discount agreements, from the raw `client_contracts` source table."
     columns:
       - name: client_id
-        description: "Client identifier this contract applies to."
+        description: "{{ doc('client_id') }} One contract per client."
         tests:
           - unique
           - not_null

@@ -9,25 +9,25 @@ models:
             compare_model: ref('stg_transactions__transactions')
     columns:
       - name: transaction_id
-        description: "Unique transaction identifier; primary key of this model."
+        description: "{{ doc('transaction_id') }} Primary key of this model."
         tests:
           - unique
           - not_null
 
       - name: transaction_date
-        description: "Date the transaction occurred. Passed through from staging, where it is tested."
+        description: "{{ doc('transaction_date') }} Passed through from staging, where it is tested."
 
       - name: client_id
-        description: "Client identifier. Passed through from staging, where it is tested."
+        description: "{{ doc('client_id') }} Passed through from staging, where it is tested."
 
       - name: transaction_type
-        description: "Type of transaction. Passed through from staging, where it is tested."
+        description: "{{ doc('transaction_type') }} Passed through from staging, where it is tested."
 
       - name: transaction_currency
-        description: "Currency of the recorded amounts. Passed through from staging, where it is tested."
+        description: "{{ doc('transaction_currency') }} Passed through from staging, where it is tested."
 
       - name: amount_direction
-        description: "Sign applied to the recorded amount, from the `transaction_types` seed (-1 for refunds, otherwise 1). Tested in the seed; every transaction type is guaranteed a match by the relationships test in staging."
+        description: "{{ doc('amount_direction') }} From the `transaction_types` seed, where it is tested; the relationships test in staging guarantees every transaction type has a match."
 
       - name: gross_amount_local
         description: "Amount as recorded, in the original currency (staging's `transaction_amount`, renamed). Always positive; tested in staging."
@@ -58,7 +58,7 @@ models:
                 where: "transaction_type != 'refund'"
 
       - name: is_duplicate_refund
-        description: "1 for a refund of a payment that has already been fully refunded. Passed through from staging, where it is set and tested; this model excludes flagged rows from revenue and spend."
+        description: "{{ doc('is_duplicate_refund') }} Passed through from staging, where it is set and tested."
 
       - name: is_revenue_recognised
         description: "1 if this transaction generates revenue: the type recognises revenue, nothing is outstanding (chargebacks must be resolved), and it is not a duplicate refund."
