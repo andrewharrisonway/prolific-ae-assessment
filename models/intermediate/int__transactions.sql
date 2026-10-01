@@ -13,19 +13,19 @@ transactions AS (
         , platform_fee_margin
         , linked_transaction_id
     FROM
-        {{ref('stg_transactions__transactions')}}
-),
+        {{ ref('stg_transactions__transactions') }}
+)
 
-currency_rates AS (
+, currency_rates AS (
     SELECT
         currency
         , rate_date
         , exchange_rate_to_gbp
     FROM
-        {{ref('stg_currencies__currency_rates')}}
-),
+        {{ ref('stg_currencies__currency_rates') }}
+)
 
-client_contracts AS (
+, client_contracts AS (
     SELECT
         client_id
         , contract_start_date
@@ -33,135 +33,266 @@ client_contracts AS (
         , spend_threshold
         , discounted_fee_margin
     FROM
-        {{ref('stg_customers__client_contracts')}}
-),
+        {{ ref('stg_customers__client_contracts') }}
+)
 
-transaction_resolutions AS (
+, transaction_resolutions AS (
     SELECT
         transaction_id
         , resolution_status
         , resolution_date
     FROM
-        {{ref('stg_transactions__transaction_resolutions')}}
-),
+        {{ ref('stg_transactions__transaction_resolutions') }}
+)
+
+, transaction_types AS (
+    SELECT
+        transaction_type
+        , amount_direction
+        , recognises_revenue
+        , counts_toward_spend
+        , requires_resolution
+    FROM
+        {{ ref('transaction_types') }}
+)
 
 /* TRANSFORMATIONS */
 
 /*
 LOGIC/CHOICES:
 
-Refunds get negated.  Their revenue will be negative.
+How each transaction type behaves is defined in the `transaction_types` seed,
+not in this model:
+- amount_direction: refunds are -1, so net amounts aggregate correctly.
+- recognises_revenue / counts_toward_spend: fraud counts toward neither.
+- requires_resolution: chargebacks only count once resolved.
 
-For contract discount rates, a client must achieve a high watermark of the target
-within the duration of their contract term, at which point the discount rate will
-apply for the remainder of the term.
+Each transaction keeps its recorded (gross) amount alongside the signed (net)
+amount, so neither meaning is lost.
 
-Regular transactions apply positively.
-Refunds apply negatively.
-Fraud does not apply.
-Chargebacks do apply but only after they have been resolved.
+For contract discount rates, a client must achieve a high watermark of the
+target within the duration of their contract term, at which point the discount
+rate will apply for the remainder of the term.
 
 ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
 */
 
-transactions_negated_enriched AS (
-    -- note 1: I'm opting to negate refund values for ease of aggregation
+, transactions_classified AS (
     SELECT
         txn.transaction_id
         , txn.transaction_date
         , txn.client_id
         , txn.transaction_type
-        , IF(txn.transaction_type = 'refund', txn.transaction_amount_local*-1, txn.transaction_amount_local) transaction_amount_local
         , txn.transaction_currency
         , txn.platform_fee_margin
-        , trl.transaction_id IS NOT NULL AS is_chargeback_triggered
+        , txn.transaction_amount_local AS gross_amount_local
         , trl.resolution_status
         , trl.resolution_date
+        , tty.amount_direction
+        , tty.recognises_revenue
+        , tty.counts_toward_spend
+        , (
+            txn.transaction_amount_local * tty.amount_direction
+        ) AS net_amount_local
+        -- NOTE: settled means nothing is outstanding: either the type needs no
+        -- resolution, or it has been resolved
+        , CASE
+            WHEN tty.requires_resolution = 0 THEN 1
+            WHEN trl.resolution_status = 'resolved' THEN 1
+            ELSE 0
+        END AS is_settled
     FROM
-        transactions txn
+        transactions AS txn
     LEFT JOIN
-        transaction_resolutions trl
-            ON txn.transaction_id = trl.transaction_id
-),
+        transaction_types AS tty
+        ON txn.transaction_type = tty.transaction_type
+    LEFT JOIN
+        transaction_resolutions AS trl
+        ON txn.transaction_id = trl.transaction_id
+)
 
-transactions_converted_and_contracts AS (
+, client_contract_windows AS (
     SELECT
-        tne.*
-        , ROUND(tne.transaction_amount_local*crt.exchange_rate_to_gbp,2) AS transaction_amount_gbp
-        , cct.spend_threshold
-        , cct.discounted_fee_margin
-        , cct.contract_start_date
-        , date(cct.contract_start_date, '+'||cct.contract_duration_months||' months') AS contract_end_date
-        , tne.transaction_date >= cct.contract_start_date 
-            AND tne.transaction_date < date(cct.contract_start_date, '+'||cct.contract_duration_months||' months')
-            AS is_in_contract_period
+        client_id
+        , spend_threshold
+        , discounted_fee_margin
+        , contract_start_date
+        , DATE(
+            contract_start_date
+            , '+' || contract_duration_months || ' months'
+        ) AS contract_end_date
     FROM
-        transactions_negated_enriched tne
+        client_contracts
+)
+
+, transactions_converted_and_contracts AS (
+    SELECT
+        tcl.transaction_id
+        , tcl.transaction_date
+        , tcl.client_id
+        , tcl.transaction_type
+        , tcl.transaction_currency
+        , tcl.platform_fee_margin
+        , tcl.amount_direction
+        , tcl.gross_amount_local
+        , tcl.net_amount_local
+        , ccw.spend_threshold
+        , ccw.discounted_fee_margin
+        , ccw.contract_start_date
+        , ccw.contract_end_date
+        , tcl.recognises_revenue * tcl.is_settled AS is_revenue_recognised
+        , tcl.counts_toward_spend * tcl.is_settled AS is_spend_qualifying
+        -- NOTE: chargebacks count toward spend when they resolve, so they
+        -- are ordered by resolution date rather than transaction date
+        , COALESCE(
+            tcl.resolution_date, tcl.transaction_date
+        ) AS spend_effective_date
+        , ROUND(
+            tcl.gross_amount_local * crt.exchange_rate_to_gbp, 2
+        ) AS gross_amount_gbp
+        , ROUND(
+            tcl.net_amount_local * crt.exchange_rate_to_gbp, 2
+        ) AS net_amount_gbp
+        , (
+            tcl.transaction_date >= ccw.contract_start_date
+            AND tcl.transaction_date < ccw.contract_end_date
+        ) AS is_in_contract_period
+    FROM
+        transactions_classified AS tcl
     LEFT JOIN
-        currency_rates crt
-            ON crt.currency = tne.transaction_currency
-            AND crt.rate_date = (                               -- NOTE: I am normally not fond of subqueries but this one
-                SELECT MAX(cr2.rate_date)                       -- is useful for filling in conversion rate gaps at the end
-                FROM currency_rates cr2                         -- of the period.
-                WHERE cr2.currency = tne.transaction_currency
-                  AND cr2.rate_date <= tne.transaction_date
+        currency_rates AS crt
+        ON
+            tcl.transaction_currency = crt.currency
+            -- NOTE: I am normally not fond of subqueries, but this one fills
+            -- conversion rate gaps at the end of the period. In production,
+            -- this should be addressed upstream to determine the source of
+            -- the gaps.
+            AND crt.rate_date = (
+                SELECT MAX(cr2.rate_date)
+                FROM currency_rates AS cr2
+                WHERE
+                    cr2.currency = tcl.transaction_currency
+                    AND cr2.rate_date <= tcl.transaction_date
             )
     LEFT JOIN
-        client_contracts cct on tne.client_id = cct.client_id
-),
+        client_contract_windows AS ccw
+        ON tcl.client_id = ccw.client_id
+)
 
-transactions_cumulative AS (
+, transactions_cumulative AS (
     SELECT
-        *
+        transaction_id
+        , transaction_date
+        , client_id
+        , transaction_type
+        , transaction_currency
+        , amount_direction
+        , gross_amount_local
+        , net_amount_local
+        , gross_amount_gbp
+        , net_amount_gbp
+        , platform_fee_margin
+        , is_revenue_recognised
+        , is_spend_qualifying
+        , spend_effective_date
+        , spend_threshold
+        , discounted_fee_margin
+        , is_in_contract_period
         , SUM(
-            IF(
-                is_in_contract_period IS NULL, NULL,    -- filters out non-contract customers
-                is_in_contract_period = 0, 0,           -- only applies when transactions are in window
-                transaction_type = 'fraud', 0,          -- fraud does not count toward cumulative spend
-                resolution_status = 'pending', 0,       -- unresolved chargebacks do not count toward cumulative spend
-                transaction_amount_gbp
-            )
+            CASE
+                -- non-contract clients have no cumulative spend
+                WHEN is_in_contract_period IS NULL THEN NULL
+                WHEN
+                    is_in_contract_period = 1 AND is_spend_qualifying = 1
+                    THEN net_amount_gbp
+                ELSE 0
+            END
         ) OVER (
             PARTITION BY client_id
-            ORDER BY COALESCE(resolution_date, transaction_date), transaction_id -- coalesce dates to ensure chargebacks are considered when they occur, transaction_id keeps deterministic sorting
+            -- NOTE: transaction_id keeps the sort deterministic
+            ORDER BY spend_effective_date, transaction_id
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        ) cumulative_spend_gbp
+        ) AS cumulative_spend_gbp
     FROM
         transactions_converted_and_contracts
 )
+
 , transactions_discount_status AS (
     SELECT
-        *
+        transaction_id
+        , transaction_date
+        , client_id
+        , transaction_type
+        , transaction_currency
+        , amount_direction
+        , gross_amount_local
+        , net_amount_local
+        , gross_amount_gbp
+        , net_amount_gbp
+        , platform_fee_margin
+        , is_revenue_recognised
+        , is_spend_qualifying
+        , discounted_fee_margin
+        , is_in_contract_period
         , CASE
-            WHEN is_in_contract_period = 0 THEN 0        -- contract expired: force off
-            WHEN is_in_contract_period IS NULL THEN NULL -- no contract at all: no discount concept applies
-            ELSE MAX(
-                (cumulative_spend_gbp >= spend_threshold)
-            ) OVER (
+            -- contract expired: force off
+            WHEN is_in_contract_period = 0 THEN 0
+            -- no contract at all: no discount concept applies
+            WHEN is_in_contract_period IS NULL THEN NULL
+            ELSE MAX(cumulative_spend_gbp >= spend_threshold) OVER (
                 PARTITION BY client_id
-                ORDER BY COALESCE(resolution_date, transaction_date), transaction_id
+                ORDER BY spend_effective_date, transaction_id
                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
             )
-          END AS is_discount_earned
+        END AS is_discount_earned
     FROM
         transactions_cumulative
 )
+
+, transactions_fee_margin AS (
+    SELECT
+        transaction_id
+        , transaction_date
+        , client_id
+        , transaction_type
+        , transaction_currency
+        , amount_direction
+        , gross_amount_local
+        , net_amount_local
+        , gross_amount_gbp
+        , net_amount_gbp
+        , is_revenue_recognised
+        , is_spend_qualifying
+        , CASE
+            WHEN
+                is_in_contract_period = 1 AND is_discount_earned = 1
+                THEN discounted_fee_margin
+            ELSE platform_fee_margin
+        END AS applicable_fee_margin
+    FROM
+        transactions_discount_status
+)
+
 , output_cte AS (
     SELECT
         transaction_id
         , transaction_date
         , client_id
         , transaction_type
-        , transaction_amount_local
         , transaction_currency
-        , transaction_amount_gbp
-        , IF(transaction_type = 'fraud',0,
-            transaction_type = 'chargeback' AND resolution_status IS NOT 'resolved', 0,
-            is_in_contract_period = 1 AND is_discount_earned = 1, transaction_amount_gbp * discounted_fee_margin,
-            transaction_amount_gbp * platform_fee_margin
-        ) revenue_gbp
+        , amount_direction
+        , gross_amount_local
+        , net_amount_local
+        , gross_amount_gbp
+        , net_amount_gbp
+        , is_revenue_recognised
+        , is_spend_qualifying
+        , applicable_fee_margin
+        , net_amount_gbp
+        * applicable_fee_margin
+        * is_revenue_recognised AS revenue_gbp
     FROM
-        transactions_discount_status
+        transactions_fee_margin
 )
 
 SELECT * FROM output_cte

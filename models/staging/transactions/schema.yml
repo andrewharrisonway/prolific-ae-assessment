@@ -39,9 +39,10 @@ models:
         description: "Type of transaction."
         tests:
           - not_null
-          - accepted_values:
+          - relationships: # NB: valid types and their behaviour are defined in the transaction_types seed
               arguments:
-                values: ['payment', 'refund', 'fraud', 'chargeback']
+                to: ref('transaction_types')
+                field: transaction_type
 
       - name: transaction_date
         description: "Date the transaction occurred."

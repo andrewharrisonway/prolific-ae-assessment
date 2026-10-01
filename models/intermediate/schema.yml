@@ -1,0 +1,82 @@
+version: 2
+
+models:
+  - name: int__transactions
+    description: "One row per transaction, converted to GBP, with contract discounts applied and revenue calculated. Transaction type behaviour comes from the `transaction_types` seed."
+    columns:
+      - name: transaction_id
+        description: "Unique transaction identifier."
+        tests:
+          - unique
+          - not_null
+
+      - name: transaction_type
+        description: "Type of transaction."
+        tests:
+          - not_null
+
+      - name: amount_direction
+        description: "Sign applied to the recorded amount, from the `transaction_types` seed (-1 for refunds, otherwise 1)."
+        tests:
+          - not_null
+
+      - name: gross_amount_local
+        description: "Amount as recorded, in the original currency. Always positive."
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"
+
+      - name: net_amount_local
+        description: "Signed amount in the original currency (`gross_amount_local * amount_direction`)."
+        tests:
+          - not_null
+
+      - name: gross_amount_gbp
+        description: "Recorded amount converted to GBP at the latest rate on or before the transaction date."
+        tests:
+          - not_null
+
+      - name: net_amount_gbp
+        description: "Signed amount in GBP. Negative for refunds, positive otherwise."
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "< 0"
+              config:
+                where: "transaction_type = 'refund'"
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"
+              config:
+                where: "transaction_type != 'refund'"
+
+      - name: is_revenue_recognised
+        description: "1 if this transaction generates revenue: the type recognises revenue and nothing is outstanding (chargebacks must be resolved)."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+
+      - name: is_spend_qualifying
+        description: "1 if this transaction counts toward cumulative contract spend (before the contract window is applied)."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+
+      - name: applicable_fee_margin
+        description: "Fee margin applied: the contracted discounted margin once the spend threshold is reached within the contract term, otherwise the platform fee margin."
+        tests:
+          - not_null
+
+      - name: revenue_gbp
+        description: "Platform revenue in GBP (`net_amount_gbp * applicable_fee_margin * is_revenue_recognised`)."
+        tests:
+          - not_null
