@@ -1,0 +1,49 @@
+version: 2
+
+# These seeds stand in for an extract-and-load tool (e.g. Fivetran): `dbt seed`
+# loads the raw assessment data into the warehouse, and models read it through
+# `source()` (see models/raw/sources.yml), never `ref()`.
+#
+# Column types are pinned so the raw tables match the data as delivered:
+# without them, seed type inference would parse dates (including the
+# dd/mm/yyyy resolution dates) before staging gets to clean them.
+
+seeds:
+  - name: transactions
+    description: "Raw platform transactions. Read via source('global_transactions', 'transactions')."
+    config:
+      column_types:
+        transaction_id: text
+        client_id: text
+        transaction_amount: real
+        transaction_type: text
+        transaction_date: text
+        platform_fee_margin: real
+        currency: text
+        linked_transaction_id: text
+
+  - name: client_contracts
+    description: "Raw client discount agreements. Read via source('global_transactions', 'client_contracts')."
+    config:
+      column_types:
+        client_id: text
+        contract_start_date: text
+        contract_duration_months: int
+        spend_threshold: int
+        discounted_fee_margin: real
+
+  - name: currency_rates
+    description: "Raw daily currency exchange rates. Read via source('global_transactions', 'currency_rates')."
+    config:
+      column_types:
+        currency: text
+        rate_date: text
+        exchange_rate_to_gbp: real
+
+  - name: transaction_resolutions
+    description: "Raw chargeback resolution statuses. Read via source('global_transactions', 'transaction_resolutions')."
+    config:
+      column_types:
+        transaction_id: text
+        resolution_status: text
+        resolution_date: text

@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: global_transactions
-    description: "Pre-built raw tables provided for the assessment"
+    description: "Raw assessment data, loaded into the warehouse by `dbt seed` from seeds/raw/ (standing in for an extract-and-load tool)."
     schema: main
     tables:
       - name: transactions

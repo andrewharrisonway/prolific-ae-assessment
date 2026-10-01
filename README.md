@@ -24,20 +24,30 @@ dbt deps
 ### Running
 
 ```bash
+dbt seed
 dbt build
 ```
 
-The raw source tables live in the pre-built database at `target/global_transactions.db`, and models are written back to the same file.
+Everything is written to a SQLite database at `target/global_transactions.db`, which is created on the first run. The database is disposable: `dbt clean` deletes it (along with installed packages), and `dbt deps` followed by `dbt seed` rebuilds it.
 
-> **Do not run `dbt clean`.** `target/` is listed in `clean-targets`, so it would delete the database along with the source data.
+Run `dbt seed` before `dbt build`. Models read the raw tables through `source()`, which creates no dependency on the seeds in dbt's graph, so on a fresh database `dbt build` alone runs the staging models before the raw tables exist, and they fail.
+
+### Why the raw data is loaded as seeds
+
+The brief supplies the raw data as dbt seeds. Seeds are intended for small, static reference data, and in production raw data would arrive through an extract-and-load tool rather than dbt. To keep the models production-shaped:
+
+- `seeds/raw/` stands in for that load step: `dbt seed` lands the four raw tables in the warehouse, with column types pinned so they match the data as delivered.
+- Models only read raw data through `source()` (declared in `models/raw/sources.yml`), never `ref()`. Swapping the seeds for a real loader would need no model changes.
+- `seeds/reference/` holds genuine seed data: the `transaction_types` business rules.
 
 ## Project structure
 
 ```
 seeds/
-└── transaction_types.csv   business rules per transaction type (see below)
+├── raw/            the four raw data files, loaded by dbt seed (stand-in for extract-and-load)
+└── reference/      transaction_types.csv: business rules per transaction type (see below)
 models/
-├── raw/            sources.yml: the four pre-built raw tables
+├── raw/            sources.yml: declares the raw tables loaded from seeds/raw/
 ├── staging/        one model per source: typing, renaming, date fixes, tests
 │   ├── currencies/
 │   ├── customers/
@@ -66,7 +76,7 @@ transaction_types (seed) ─┘
 
 ### Transaction types
 
-How each transaction type behaves is defined as data in the [`transaction_types`](seeds/transaction_types.csv) seed, not in model logic:
+How each transaction type behaves is defined as data in the [`transaction_types`](seeds/reference/transaction_types.csv) seed, not in model logic:
 
 | Type | `amount_direction` | `recognises_revenue` | `counts_toward_spend` | `requires_resolution` |
 |---|---|---|---|---|
