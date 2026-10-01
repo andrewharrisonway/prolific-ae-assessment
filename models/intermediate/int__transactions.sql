@@ -30,11 +30,11 @@ transactions AS (
     SELECT
         client_id
         , contract_start_date
-        , contract_duration_months
+        , contract_end_date
         , spend_threshold
         , discounted_fee_margin
     FROM
-        {{ ref('stg_clients__client_contracts') }}
+        {{ ref('int__client_contracts') }}
 )
 
 , transaction_resolutions AS (
@@ -126,20 +126,6 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
         ON txn.linked_transaction_id = lnk.transaction_id
 )
 
-, client_contract_windows AS (
-    SELECT
-        client_id
-        , spend_threshold
-        , discounted_fee_margin
-        , contract_start_date
-        , DATE(
-            contract_start_date
-            , '+' || contract_duration_months || ' months'
-        ) AS contract_end_date
-    FROM
-        client_contracts
-)
-
 , transactions_converted_and_contracts AS (
     SELECT
         tcl.transaction_id
@@ -151,11 +137,18 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
         , tcl.amount_direction
         , tcl.gross_amount_local
         , tcl.net_amount_local
-        , ccw.spend_threshold
-        , ccw.discounted_fee_margin
-        , ccw.contract_start_date
-        , ccw.contract_end_date
+        , cct.spend_threshold
+        , cct.discounted_fee_margin
+        , cct.contract_start_date
+        , cct.contract_end_date
         , tcl.is_duplicate_refund
+        , tcl.resolution_status
+        , tcl.resolution_date
+        -- NOTE: chargebacks count toward spend when they resolve, so they
+        -- are ordered by resolution date rather than transaction date
+        , CAST(
+            COALESCE(tcl.resolution_date, tcl.transaction_date) AS text
+        ) AS spend_effective_date
         , CASE
             WHEN tcl.is_duplicate_refund = 1 THEN 0
             ELSE tcl.recognises_revenue * tcl.is_settled
@@ -164,11 +157,6 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
             WHEN tcl.is_duplicate_refund = 1 THEN 0
             ELSE tcl.counts_toward_spend * tcl.is_settled
         END AS is_spend_qualifying
-        -- NOTE: chargebacks count toward spend when they resolve, so they
-        -- are ordered by resolution date rather than transaction date
-        , COALESCE(
-            tcl.resolution_date, tcl.transaction_date
-        ) AS spend_effective_date
         , ROUND(
             tcl.gross_amount_local * crt.exchange_rate_to_gbp, 2
         ) AS gross_amount_gbp
@@ -176,13 +164,13 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
             tcl.net_amount_local * crt.exchange_rate_to_gbp, 2
         ) AS net_amount_gbp
         , (
-            tcl.transaction_date >= ccw.contract_start_date
-            AND tcl.transaction_date < ccw.contract_end_date
+            tcl.transaction_date >= cct.contract_start_date
+            AND tcl.transaction_date < cct.contract_end_date
         ) AS is_in_contract_period
         -- NOTE: null unless this is a refund of a contracted client
         , (
-            tcl.linked_payment_date >= ccw.contract_start_date
-            AND tcl.linked_payment_date < ccw.contract_end_date
+            tcl.linked_payment_date >= cct.contract_start_date
+            AND tcl.linked_payment_date < cct.contract_end_date
         ) AS is_linked_payment_in_contract_period
     FROM
         transactions_classified AS tcl
@@ -202,8 +190,50 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
                     AND cr2.rate_date <= tcl.transaction_date
             )
     LEFT JOIN
-        client_contract_windows AS ccw
-        ON tcl.client_id = ccw.client_id
+        client_contracts AS cct
+        ON tcl.client_id = cct.client_id
+)
+
+/*
+Each transaction's contribution to its client's contract spend, so the running
+total below (and the monthly mart) sum the same values.
+*/
+
+, transactions_contract_spend AS (
+    SELECT
+        transaction_id
+        , transaction_date
+        , client_id
+        , transaction_type
+        , transaction_currency
+        , amount_direction
+        , gross_amount_local
+        , net_amount_local
+        , gross_amount_gbp
+        , net_amount_gbp
+        , platform_fee_margin
+        , is_duplicate_refund
+        , resolution_status
+        , resolution_date
+        , is_revenue_recognised
+        , is_spend_qualifying
+        , spend_effective_date
+        , spend_threshold
+        , discounted_fee_margin
+        , is_in_contract_period
+        , CASE
+            -- non-contract clients have no contract spend
+            WHEN is_in_contract_period IS NULL THEN NULL
+            -- refunds only reduce spend if their payment counted toward it
+            WHEN
+                is_in_contract_period = 1
+                AND is_spend_qualifying = 1
+                AND COALESCE(is_linked_payment_in_contract_period, 1) = 1
+                THEN net_amount_gbp
+            ELSE 0
+        END AS contract_spend_gbp
+    FROM
+        transactions_converted_and_contracts
 )
 
 , transactions_cumulative AS (
@@ -220,32 +250,23 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
         , net_amount_gbp
         , platform_fee_margin
         , is_duplicate_refund
+        , resolution_status
+        , resolution_date
         , is_revenue_recognised
         , is_spend_qualifying
         , spend_effective_date
         , spend_threshold
         , discounted_fee_margin
         , is_in_contract_period
-        , SUM(
-            CASE
-                -- non-contract clients have no cumulative spend
-                WHEN is_in_contract_period IS NULL THEN NULL
-                -- refunds only reduce spend if their payment counted toward it
-                WHEN
-                    is_in_contract_period = 1
-                    AND is_spend_qualifying = 1
-                    AND COALESCE(is_linked_payment_in_contract_period, 1) = 1
-                    THEN net_amount_gbp
-                ELSE 0
-            END
-        ) OVER (
+        , contract_spend_gbp
+        , SUM(contract_spend_gbp) OVER (
             PARTITION BY client_id
             -- NOTE: transaction_id keeps the sort deterministic
             ORDER BY spend_effective_date, transaction_id
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) AS cumulative_spend_gbp
     FROM
-        transactions_converted_and_contracts
+        transactions_contract_spend
 )
 
 , transactions_discount_status AS (
@@ -264,6 +285,10 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
         , is_duplicate_refund
         , is_revenue_recognised
         , is_spend_qualifying
+        , resolution_status
+        , resolution_date
+        , spend_effective_date
+        , contract_spend_gbp
         , discounted_fee_margin
         , is_in_contract_period
         , CASE
@@ -296,6 +321,18 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
         , is_duplicate_refund
         , is_revenue_recognised
         , is_spend_qualifying
+        , resolution_status
+        , resolution_date
+        , spend_effective_date
+        , contract_spend_gbp
+        , is_in_contract_period
+        , is_discount_earned
+        -- NOTE: revenue is recognised when it takes effect: resolution date for
+        -- chargebacks, transaction date otherwise; never for unrecognised rows
+        , CAST(
+            CASE WHEN is_revenue_recognised = 1 THEN spend_effective_date END
+            AS text
+        ) AS recognition_date
         , CASE
             WHEN
                 is_in_contract_period = 1 AND is_discount_earned = 1
@@ -322,6 +359,13 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
         , is_revenue_recognised
         , is_spend_qualifying
         , applicable_fee_margin
+        , resolution_status
+        , resolution_date
+        , recognition_date
+        , spend_effective_date
+        , is_in_contract_period
+        , contract_spend_gbp
+        , is_discount_earned
         , CASE
             WHEN is_revenue_recognised = 0 THEN 0
             ELSE net_amount_gbp * applicable_fee_margin
