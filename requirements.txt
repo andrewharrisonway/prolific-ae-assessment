@@ -1,0 +1,4 @@
+dbt-core==1.11.15
+dbt-sqlite==1.10.0
+sqlfluff==4.3.0
+sqlfluff-templater-dbt==4.3.0
