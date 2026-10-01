@@ -109,12 +109,14 @@ Six payments are refunded more than once (one of them three times): 7 refunds in
 
 - All amounts are converted to GBP using the latest available rate **on or before** the transaction date.
 - Exchange rates end on 2024-06-30 but transactions run into July 2024, so the last available rate is carried forward.
+- Refunds are converted at the rate on the refund date, not the original payment's rate. The client is refunded the full amount in the currency they paid, so the GBP cost of the refund is whatever that amount is worth on the day. Any difference from exchange-rate movement between payment and refund is treated as a cost of doing business, not something to pass on to the client. In this data, USD payment and refund pairs leave a net +£1,486 of GMV (+£297 revenue) from rate movement.
 
 ### Contract discounts
 
 - Four clients (C001–C004) have contracts; the remaining clients pay the standard platform fee margin.
 - A contract is active from `contract_start_date` (inclusive) for `contract_duration_months` (end date exclusive).
 - Cumulative qualifying spend in GBP is tracked within the contract window, ordered by the date each transaction takes effect (resolution date for chargebacks). Fraud and pending chargebacks do not count.
+- A refund only reduces contract spend if the payment it reverses counted toward it, i.e. the payment fell inside the contract window. For example, C004's contract starts on 2024-03-01, and a refund on that day of a February payment (£64,580) does not reduce C004's spend, because the payment was never added to it.
 - Once cumulative spend reaches `spend_threshold`, the discounted fee margin applies for the remainder of the contract term. The discount applies from the transaction that crosses the threshold.
 - **Assumption:** `spend_threshold` is in GBP. The contracts table does not state a currency, and each client transacts in both GBP and USD.
 
@@ -126,7 +128,7 @@ Six payments are refunded more than once (one of them three times): 7 refunds in
 ## Known findings
 
 - **Duplicate refunds:** 6 payments were refunded more than once; the 7 extra refunds are excluded (see Duplicate refunds above). `dbt build` reports this as one expected warning.
-- **No contracted client reaches its spend threshold** under the logic above, so the discounted margin is never applied in this dataset. The logic is implemented as I understand the business rules, rather than adjusted to make the discount trigger. A naive gross-GMV measure (all transaction types summed) does cross the threshold for C001 and C002; this will be exposed in the mart for comparison but is not the recommended definition.
+- **No discount triggers during the period of observation.** No contracted client reaches its spend threshold within the data provided, so the discounted margin is never applied. The logic is implemented as I understand the business rules, rather than adjusted to make the discount trigger. A naive gross-GMV measure (all transaction types summed) does cross the threshold for C001 and C002; this will be exposed in the mart for comparison but is not the recommended definition.
 
 ## Testing
 

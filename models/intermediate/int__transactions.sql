@@ -75,6 +75,10 @@ For contract discount rates, a client must achieve a high watermark of the
 target within the duration of their contract term, at which point the discount
 rate will apply for the remainder of the term.
 
+A refund only reduces contract spend if the payment it reverses counted toward
+that spend, i.e. the payment fell inside the contract window. Otherwise a
+refund of a pre-contract payment would reduce spend that was never added.
+
 Duplicate refunds: some payments are refunded in full more than once. Staging
 flags every refund after the first (is_duplicate_refund); this model excludes
 them from revenue and spend. The rows are kept so the exclusion is visible
@@ -94,6 +98,7 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
         , txn.transaction_amount_local AS gross_amount_local
         , trl.resolution_status
         , trl.resolution_date
+        , lnk.transaction_date AS linked_payment_date
         , tty.amount_direction
         , tty.recognises_revenue
         , tty.counts_toward_spend
@@ -116,6 +121,9 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
     LEFT JOIN
         transaction_resolutions AS trl
         ON txn.transaction_id = trl.transaction_id
+    LEFT JOIN
+        transactions AS lnk
+        ON txn.linked_transaction_id = lnk.transaction_id
 )
 
 , client_contract_windows AS (
@@ -171,6 +179,11 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
             tcl.transaction_date >= ccw.contract_start_date
             AND tcl.transaction_date < ccw.contract_end_date
         ) AS is_in_contract_period
+        -- NOTE: null unless this is a refund of a contracted client
+        , (
+            tcl.linked_payment_date >= ccw.contract_start_date
+            AND tcl.linked_payment_date < ccw.contract_end_date
+        ) AS is_linked_payment_in_contract_period
     FROM
         transactions_classified AS tcl
     LEFT JOIN
@@ -217,8 +230,11 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
             CASE
                 -- non-contract clients have no cumulative spend
                 WHEN is_in_contract_period IS NULL THEN NULL
+                -- refunds only reduce spend if their payment counted toward it
                 WHEN
-                    is_in_contract_period = 1 AND is_spend_qualifying = 1
+                    is_in_contract_period = 1
+                    AND is_spend_qualifying = 1
+                    AND COALESCE(is_linked_payment_in_contract_period, 1) = 1
                     THEN net_amount_gbp
                 ELSE 0
             END
