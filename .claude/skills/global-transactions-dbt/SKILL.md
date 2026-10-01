@@ -26,7 +26,7 @@ transactions AS (
         , transaction_currency
         , transaction_date
     FROM
-        {{ ref('stg_transactions__transactions') }}
+        {{ ref('stg_global_transactions__transactions') }}
     WHERE
         transaction_type = 'chargeback'
 )
@@ -36,7 +36,7 @@ transactions AS (
         transaction_id
         , resolution_date
     FROM
-        {{ ref('stg_transactions__transaction_resolutions') }}
+        {{ ref('stg_global_transactions__transaction_resolutions') }}
     WHERE
         resolution_status = 'resolved'
 )
@@ -105,11 +105,11 @@ raw_input AS (
 SELECT * FROM typed
 ```
 
-If the source has no single-column primary key, add a third CTE, `keyed`, after `typed`: it generates a surrogate key with `dbt_utils.generate_surrogate_key` from the typed columns, named `<entity>_id` and placed first (see `stg_currencies__currency_rates`). The key is the model's primary key and gets `unique` + `not_null` tests.
+If the source has no single-column primary key, add a third CTE, `keyed`, after `typed`: it generates a surrogate key with `dbt_utils.generate_surrogate_key` from the typed columns, named `<entity>_id` and placed first (see `stg_global_transactions__currency_rates`). The key is the model's primary key and gets `unique` + `not_null` tests.
 
 In `typed`: cast every column, rename to project naming, fix formats (e.g. `dd/mm/yyyy` → ISO date). No joins, filters or business logic: staging should be a faithful, typed copy of the source, so problems in the data surface as test failures rather than being silently filtered out.
 
-**Data quality flags belong in staging, as their own CTE after `typed` (e.g. `flagged`).** A flag that describes the source rows themselves, derived from that one source table without joins, is additive: it adds a column but never filters rows or changes the grain. For example, `is_duplicate_refund` in `stg_transactions__transactions` marks every refund after the first for the same payment. Staging only labels the row; deciding what a flag means for revenue, spend or anything else belongs in intermediate. Test the flag in staging, next to the column tests that rest on the same assumption.
+**Data quality flags belong in staging, as their own CTE after `typed` (e.g. `flagged`).** A flag that describes the source rows themselves, derived from that one source table without joins, is additive: it adds a column but never filters rows or changes the grain. For example, `is_duplicate_refund` in `stg_global_transactions__transactions` marks every refund after the first for the same payment. Staging only labels the row; deciding what a flag means for revenue, spend or anything else belongs in intermediate. Test the flag in staging, next to the column tests that rest on the same assumption.
 
 ## Formatting
 
@@ -150,11 +150,11 @@ Column aliases (`AS transaction_amount_gbp`) are a separate thing: always use `A
 
 | Thing | Convention | Example |
 |---|---|---|
-| Staging model | `stg_<source_area>__<table>` | `stg_transactions__transaction_resolutions` |
+| Staging model | `stg_<source>__<table>`, where `<source>` is the source system's name | `stg_global_transactions__transaction_resolutions` |
 | Intermediate model | `int__<entity>` | `int__transactions` |
 | Mart fact | `fct_<grain>`: events or measures at a stated grain | `fct_client_monthly_revenue`, `fct_transactions` |
 | Mart dimension | `dim_<entity>`: one row per entity, descriptive attributes | `dim_dates` |
-| Staging folder | one per source area | `models/staging/transactions/` |
+| Staging folder | one per source system, holding its staging models, `_<source>__sources.yml` and `_<source>__models.yml` | `models/staging/global_transactions/` |
 | Money columns | suffix with currency basis | `transaction_amount_local`, `revenue_gbp` |
 | Booleans | `is_` / `has_` prefix | `is_in_contract_period`, `is_discount_earned` |
 | Dates | `_date` suffix | `transaction_date`, `resolution_date` |
@@ -180,7 +180,7 @@ The warehouse is SQLite, which shapes several choices:
 - **Beware integer division.** `600 / 500` is `1` in SQLite; `CAST(x AS real)` one side when dividing columns that could both be whole.
 - **Unit test expected rows must all list the same columns**, since dbt combines them with `UNION ALL`; use `null` where a value is not asserted. Expected values that are whole numbers lose their `.0`, so prefer non-whole fixture amounts.
 - **Cast dates to text: `CAST(DATE(x) AS text)`.** SQLite stores dates as ISO text. A bare `DATE(x)` column has no declared type, so dbt unit-test fixtures cast it as `UNKNOWN` and SQLite turns `'2024-01-01'` into the number `2024`. Never `CAST(x AS date)` either: that has numeric affinity and does the same.
-- **Check dbt_utils tests that do date arithmetic.** `dbt_utils.sequential_values` cannot work on SQLite (its `CAST(... AS timestamp)` reduces dates to their year, so it never fails). Confirm a new generic test can actually fail before relying on it.
+- **dbt_utils date macros don't work on SQLite.** dbt-sqlite's `dateadd` macro errors ("no such column: day") and its `datediff` is disabled, so `dbt_utils.date_spine` fails, and `dbt_utils.sequential_values` can never fail (its `CAST(... AS timestamp)` reduces dates to their year). Build date logic with SQLite's own `DATE()` modifiers (e.g. the recursive CTE in `dim_dates`), and confirm a new generic test can actually fail before relying on it.
 - **No schemas.** Everything lands in `main`; layers are separated by folder and name prefix only.
 
 ## Documenting decisions in code
@@ -203,6 +203,7 @@ Every model has an entry in its folder's `schema.yml` with a model description a
 - **Foreign keys:** `relationships` tests. Where the source supplies no reference data to test against (e.g. no client master data), don't deduce a stand-in from the data being tested, since it would always agree with it; use the strongest check available and add an `NB:` comment naming it as a data quality gap.
 - **Conditional rules** use `config: where:`, e.g. `linked_transaction_id` is `not_null` only where `transaction_type = 'refund'`.
 - **Ranges:** use a hard bound at `error` severity for impossible values, and a soft bound at `severity: warn` for unusual but possible values.
+- **Known data quality issues:** don't leave a test permanently warning, as people learn to ignore warnings. Accept the known count with `warn_if` / `error_if` (e.g. `"> 6"`) so any new case fails, add `store_failures: true` so the known rows stay queryable, and document the issue in the README.
 - **Generic test arguments go under `arguments:`** (dbt ≥ 1.10 syntax), matching existing tests:
   ```yaml
   - dbt_utils.accepted_range:
