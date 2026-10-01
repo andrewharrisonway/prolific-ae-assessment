@@ -3,14 +3,13 @@ version: 2
 models:
   - name: stg_currencies__currency_rates
     description: "Staged daily currency exchange rates, from the raw `currency_rates` source table. rate_to_gbp expresses how many GBP one unit of `currency` is worth on `rate_date`."
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns:
-              - currency
-              - rate_date
-
     columns:
+      - name: currency_rate_id
+        description: "Primary key: surrogate key for one currency on one date, generated with `dbt_utils.generate_surrogate_key` from `currency` and `rate_date`. On SQLite it is the readable input string (e.g. `GBP-2024-01-01`) rather than an md5 hash; see `macros/sqlite__hash.sql`."
+        tests:
+          - unique
+          - not_null
+
       - name: currency
         description: "ISO currency code."
         tests:

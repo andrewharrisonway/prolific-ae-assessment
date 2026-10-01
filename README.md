@@ -46,6 +46,8 @@ The brief supplies the raw data as dbt seeds. Seeds are intended for small, stat
 seeds/
 ├── raw/            the four raw data files, loaded by dbt seed (stand-in for extract-and-load)
 └── reference/      transaction_types.csv: business rules per transaction type (see below)
+macros/
+└── sqlite__hash.sql   makes surrogate keys work on SQLite, which has no md5()
 models/
 ├── raw/            sources.yml: declares the raw tables loaded from seeds/raw/
 ├── staging/        one model per source: typing, renaming, date fixes, tests

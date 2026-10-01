@@ -15,4 +15,14 @@ raw_input AS (
     FROM raw_input
 )
 
-SELECT * FROM typed
+, keyed AS (
+    SELECT
+        {{ dbt_utils.generate_surrogate_key(['currency', 'rate_date']) }}
+            AS currency_rate_id
+        , currency
+        , rate_date
+        , exchange_rate_to_gbp
+    FROM typed
+)
+
+SELECT * FROM keyed

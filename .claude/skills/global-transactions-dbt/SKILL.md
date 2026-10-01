@@ -105,6 +105,8 @@ raw_input AS (
 SELECT * FROM typed
 ```
 
+If the source has no single-column primary key, add a third CTE, `keyed`, after `typed`: it generates a surrogate key with `dbt_utils.generate_surrogate_key` from the typed columns, named `<entity>_id` and placed first (see `stg_currencies__currency_rates`). The key is the model's primary key and gets `unique` + `not_null` tests.
+
 In `typed`: cast every column, rename to project naming, fix formats (e.g. `dd/mm/yyyy` → ISO date). No joins, filters or business logic: staging should be a faithful, typed copy of the source, so problems in the data surface as test failures rather than being silently filtered out.
 
 ## Formatting
@@ -168,6 +170,7 @@ The warehouse is SQLite, which shapes several choices:
   ```
 - **No date_trunc or regex.** Use `DATE(d, 'start of month')` for month buckets, `DATE(d, '+N months')` for offsets, and `GLOB` patterns for format tests.
 - **Types are affinities.** `CAST(x AS numeric(8, 2))` doesn't enforce precision; keep the precision anyway as documentation, but make it valid (precision ≥ scale) so it ports to another warehouse.
+- **No hash functions.** SQLite has no `md5()`, so `macros/sqlite__hash.sql` overrides the adapter's hash: on SQLite, surrogate keys are the readable input string (e.g. `GBP-2024-01-01`), and other adapters still use md5. Always generate keys with `dbt_utils.generate_surrogate_key`, never by concatenating columns by hand, so they stay portable.
 - **No schemas.** Everything lands in `main`; layers are separated by folder and name prefix only.
 
 ## Documenting decisions in code
