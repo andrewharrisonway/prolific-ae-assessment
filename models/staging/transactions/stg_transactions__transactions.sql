@@ -20,4 +20,30 @@ raw_input AS (
     FROM raw_input
 )
 
-SELECT * FROM typed
+, flagged AS (
+    -- NOTE: refunds are always for the full payment amount, so any refund
+    -- after the first for the same payment is a duplicate. Flagged, not
+    -- filtered: what to do about duplicates is decided in int__transactions.
+    SELECT
+        transaction_id
+        , client_id
+        , transaction_amount
+        , transaction_type
+        , platform_fee_margin
+        , transaction_currency
+        , linked_transaction_id
+        , transaction_date
+        , CASE
+            WHEN
+                transaction_type = 'refund'
+                AND ROW_NUMBER() OVER (
+                    PARTITION BY transaction_type, linked_transaction_id
+                    ORDER BY transaction_date, transaction_id
+                ) > 1
+                THEN 1
+            ELSE 0
+        END AS is_duplicate_refund
+    FROM typed
+)
+
+SELECT * FROM flagged

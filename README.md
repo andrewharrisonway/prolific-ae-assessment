@@ -91,11 +91,19 @@ How each transaction type behaves is defined as data in the [`transaction_types`
 - Fraud contributes nothing to revenue or spend.
 - Chargebacks count only once resolved, and towards spend from their resolution date. Pending chargebacks contribute zero.
 
-`int__transactions` keeps both the recorded amount (`gross_amount_*`, always positive) and the signed amount (`net_amount_*`). Revenue is `net_amount_gbp × applicable_fee_margin × is_revenue_recognised`.
+`int__transactions` keeps both the recorded amount (`gross_amount_*`, always positive) and the signed amount (`net_amount_*`). Revenue is `net_amount_gbp × applicable_fee_margin` for recognised transactions, and 0 otherwise.
 
 With four types, a seed is more structure than strictly needed. It is used deliberately: the business rules sit in one reviewable file, the staging model validates transaction types against it, and adding or changing a type becomes a data change rather than a logic change.
 
-All refunds link to a payment from the same client, in the same currency, for no more than the original amount. Chargebacks have no linked transaction and are treated as standalone events.
+Every refund links to a payment from the same client, in the same currency, for exactly the full payment amount. Chargebacks have no linked transaction and are treated as standalone events.
+
+### Duplicate refunds
+
+Six payments are refunded more than once (one of them three times): 7 refunds in total, worth £175,166 of GMV and £35,033 of revenue. Because every refund is for the full payment amount, a second refund of the same payment cannot be genuine, so:
+
+- Only the first refund of each payment (by date, then transaction ID) counts.
+- Later refunds are flagged `is_duplicate_refund` in staging (`stg_transactions__transactions`), which describes the source data without filtering it. `int__transactions` then excludes flagged refunds from revenue and contract spend. The rows are kept, so the exclusion is visible and can be reported.
+- A `unique` test on `linked_transaction_id` in staging catches payments refunded more than once. It is set to warn, because the raw data does contain these duplicates.
 
 ### Currency conversion
 
@@ -113,9 +121,11 @@ All refunds link to a payment from the same client, in the same currency, for no
 ### Data quality fixes
 
 - `transaction_resolutions.resolution_date` arrives as `dd/mm/yyyy`; it is converted to an ISO date in staging.
+- Duplicate refunds are flagged and excluded (see above).
 
 ## Known findings
 
+- **Duplicate refunds:** 6 payments were refunded more than once; the 7 extra refunds are excluded (see Duplicate refunds above). `dbt build` reports this as one expected warning.
 - **No contracted client reaches its spend threshold** under the logic above, so the discounted margin is never applied in this dataset. The logic is implemented as I understand the business rules, rather than adjusted to make the discount trigger. A naive gross-GMV measure (all transaction types summed) does cross the threshold for C001 and C002; this will be exposed in the mart for comparison but is not the recommended definition.
 
 ## Testing

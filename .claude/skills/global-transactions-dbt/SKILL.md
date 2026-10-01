@@ -82,7 +82,7 @@ Why each part matters:
 
 ### Staging models
 
-Staging models are the only place raw data is cleaned. Use exactly two CTEs:
+Staging models are the only place raw data is cleaned. Start with these two CTEs:
 
 ```sql
 WITH
@@ -108,6 +108,8 @@ SELECT * FROM typed
 If the source has no single-column primary key, add a third CTE, `keyed`, after `typed`: it generates a surrogate key with `dbt_utils.generate_surrogate_key` from the typed columns, named `<entity>_id` and placed first (see `stg_currencies__currency_rates`). The key is the model's primary key and gets `unique` + `not_null` tests.
 
 In `typed`: cast every column, rename to project naming, fix formats (e.g. `dd/mm/yyyy` → ISO date). No joins, filters or business logic: staging should be a faithful, typed copy of the source, so problems in the data surface as test failures rather than being silently filtered out.
+
+**Data quality flags belong in staging, as their own CTE after `typed` (e.g. `flagged`).** A flag that describes the source rows themselves, derived from that one source table without joins, is additive: it adds a column but never filters rows or changes the grain. For example, `is_duplicate_refund` in `stg_transactions__transactions` marks every refund after the first for the same payment. Staging only labels the row; deciding what a flag means for revenue, spend or anything else belongs in intermediate. Test the flag in staging, next to the column tests that rest on the same assumption.
 
 ## Formatting
 

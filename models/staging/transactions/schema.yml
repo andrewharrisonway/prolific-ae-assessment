@@ -94,7 +94,24 @@ models:
               arguments:
                 to: ref('stg_transactions__transactions')
                 field: transaction_id
+          - unique: # NB: refunds are always for the full payment amount, so a payment refunded twice is a duplicate. Warns because the raw data contains these; int__transactions flags and excludes them.
+              config:
+                severity: warn
 
+
+      - name: is_duplicate_refund
+        description: "1 for a refund of a payment that has already been refunded. Every refund is for the full payment amount, so only the first refund of a payment (by date, then transaction_id) is genuine. Flagged rather than filtered; int__transactions excludes flagged rows from revenue and spend."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "= 0"
+              config:
+                where: "transaction_type != 'refund'"
 
   - name: stg_transactions__transaction_resolutions
     description: "Staged chargeback resolution statuses, from the raw `transaction_resolutions` source table."

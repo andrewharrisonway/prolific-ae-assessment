@@ -12,6 +12,7 @@ transactions AS (
         , transaction_type
         , platform_fee_margin
         , linked_transaction_id
+        , is_duplicate_refund
     FROM
         {{ ref('stg_transactions__transactions') }}
 )
@@ -74,6 +75,11 @@ For contract discount rates, a client must achieve a high watermark of the
 target within the duration of their contract term, at which point the discount
 rate will apply for the remainder of the term.
 
+Duplicate refunds: some payments are refunded in full more than once. Staging
+flags every refund after the first (is_duplicate_refund); this model excludes
+them from revenue and spend. The rows are kept so the exclusion is visible
+downstream.
+
 ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
 */
 
@@ -91,6 +97,7 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
         , tty.amount_direction
         , tty.recognises_revenue
         , tty.counts_toward_spend
+        , txn.is_duplicate_refund
         , (
             txn.transaction_amount_local * tty.amount_direction
         ) AS net_amount_local
@@ -140,8 +147,15 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
         , ccw.discounted_fee_margin
         , ccw.contract_start_date
         , ccw.contract_end_date
-        , tcl.recognises_revenue * tcl.is_settled AS is_revenue_recognised
-        , tcl.counts_toward_spend * tcl.is_settled AS is_spend_qualifying
+        , tcl.is_duplicate_refund
+        , CASE
+            WHEN tcl.is_duplicate_refund = 1 THEN 0
+            ELSE tcl.recognises_revenue * tcl.is_settled
+        END AS is_revenue_recognised
+        , CASE
+            WHEN tcl.is_duplicate_refund = 1 THEN 0
+            ELSE tcl.counts_toward_spend * tcl.is_settled
+        END AS is_spend_qualifying
         -- NOTE: chargebacks count toward spend when they resolve, so they
         -- are ordered by resolution date rather than transaction date
         , COALESCE(
@@ -192,6 +206,7 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
         , gross_amount_gbp
         , net_amount_gbp
         , platform_fee_margin
+        , is_duplicate_refund
         , is_revenue_recognised
         , is_spend_qualifying
         , spend_effective_date
@@ -230,6 +245,7 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
         , gross_amount_gbp
         , net_amount_gbp
         , platform_fee_margin
+        , is_duplicate_refund
         , is_revenue_recognised
         , is_spend_qualifying
         , discounted_fee_margin
@@ -261,6 +277,7 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
         , net_amount_local
         , gross_amount_gbp
         , net_amount_gbp
+        , is_duplicate_refund
         , is_revenue_recognised
         , is_spend_qualifying
         , CASE
@@ -285,12 +302,14 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
         , net_amount_local
         , gross_amount_gbp
         , net_amount_gbp
+        , is_duplicate_refund
         , is_revenue_recognised
         , is_spend_qualifying
         , applicable_fee_margin
-        , net_amount_gbp
-        * applicable_fee_margin
-        * is_revenue_recognised AS revenue_gbp
+        , CASE
+            WHEN is_revenue_recognised = 0 THEN 0
+            ELSE net_amount_gbp * applicable_fee_margin
+        END AS revenue_gbp
     FROM
         transactions_fee_margin
 )

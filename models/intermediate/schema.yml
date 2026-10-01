@@ -53,8 +53,11 @@ models:
               config:
                 where: "transaction_type != 'refund'"
 
+      - name: is_duplicate_refund
+        description: "1 for a refund of a payment that has already been fully refunded. Passed through from staging, where it is set and tested; this model excludes flagged rows from revenue and spend."
+
       - name: is_revenue_recognised
-        description: "1 if this transaction generates revenue: the type recognises revenue and nothing is outstanding (chargebacks must be resolved)."
+        description: "1 if this transaction generates revenue: the type recognises revenue, nothing is outstanding (chargebacks must be resolved), and it is not a duplicate refund."
         tests:
           - not_null
           - accepted_values:
@@ -63,7 +66,7 @@ models:
                 quote: false
 
       - name: is_spend_qualifying
-        description: "1 if this transaction counts toward cumulative contract spend (before the contract window is applied)."
+        description: "1 if this transaction counts toward cumulative contract spend (before the contract window is applied). Duplicate refunds never count."
         tests:
           - not_null
           - accepted_values:
@@ -77,6 +80,6 @@ models:
           - not_null
 
       - name: revenue_gbp
-        description: "Platform revenue in GBP (`net_amount_gbp * applicable_fee_margin * is_revenue_recognised`)."
+        description: "Platform revenue in GBP: `net_amount_gbp * applicable_fee_margin` when `is_revenue_recognised`, otherwise 0."
         tests:
           - not_null
