@@ -5,28 +5,27 @@ models:
     description: "One row per transaction, converted to GBP, with contract discounts applied and revenue calculated. Transaction type behaviour comes from the `transaction_types` seed."
     columns:
       - name: transaction_id
-        description: "Unique transaction identifier."
+        description: "Unique transaction identifier. Passed through from staging (not_null tested there); uniqueness is retested because this model joins to other tables."
         tests:
           - unique
-          - not_null
+
+      - name: transaction_date
+        description: "Date the transaction occurred. Passed through from staging, where it is tested."
+
+      - name: client_id
+        description: "Client identifier. Passed through from staging, where it is tested."
 
       - name: transaction_type
-        description: "Type of transaction."
-        tests:
-          - not_null
+        description: "Type of transaction. Passed through from staging, where it is tested."
+
+      - name: transaction_currency
+        description: "Currency of the recorded amounts. Passed through from staging, where it is tested."
 
       - name: amount_direction
-        description: "Sign applied to the recorded amount, from the `transaction_types` seed (-1 for refunds, otherwise 1)."
-        tests:
-          - not_null
+        description: "Sign applied to the recorded amount, from the `transaction_types` seed (-1 for refunds, otherwise 1). Tested in the seed; every transaction type is guaranteed a match by the relationships test in staging."
 
       - name: gross_amount_local
-        description: "Amount as recorded, in the original currency. Always positive."
-        tests:
-          - not_null
-          - dbt_utils.expression_is_true:
-              arguments:
-                expression: "> 0"
+        description: "Amount as recorded, in the original currency (staging's `transaction_amount`, renamed). Always positive; tested in staging."
 
       - name: net_amount_local
         description: "Signed amount in the original currency (`gross_amount_local * amount_direction`)."
