@@ -1,5 +1,6 @@
 {#
-    Column descriptions for the raw tables, shared by models/raw/sources.yml
+    Column descriptions for the raw tables, shared by the source definitions
+    (models/staging/global_transactions/_global_transactions__sources.yml)
     and seeds/raw/_raw_seeds.yml, which describe the same tables. They describe
     the data as delivered; staging cleans, types and renames it.
 #}
