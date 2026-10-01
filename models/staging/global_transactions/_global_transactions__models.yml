@@ -1,7 +1,7 @@
 version: 2
 
 models:
-  - name: stg_clients__client_contracts
+  - name: stg_global_transactions__client_contracts
     description: "Staged client discount agreements, from the raw `client_contracts` source table."
     columns:
       - name: client_id
@@ -58,7 +58,7 @@ models:
               config:
                 severity: warn
 
-  - name: stg_currencies__currency_rates
+  - name: stg_global_transactions__currency_rates
     description: "Staged daily currency exchange rates, from the raw `currency_rates` source table. `exchange_rate_to_gbp` expresses how many GBP one unit of `currency` is worth on `rate_date`."
     # NB: daily rate completeness is tested in tests/assert_currency_rates_are_daily.sql
     columns:
@@ -97,7 +97,7 @@ models:
               config:
                 where: "currency = 'GBP'"
 
-  - name: stg_transactions__transactions
+  - name: stg_global_transactions__transactions
     description: "Staged transactions, lightly cleaned/standardised from the raw `transactions` source table."
     columns:
       - name: transaction_id
@@ -110,13 +110,13 @@ models:
                 expression: "GLOB 'T[0-9][0-9][0-9][0-9][0-9][0-9]'"
           - relationships:
               arguments:
-                to: ref('stg_transactions__transaction_resolutions')
+                to: ref('stg_global_transactions__transaction_resolutions')
                 field: transaction_id
               config:
                 where: "transaction_type = 'chargeback'"
 
       - name: client_id
-        description: "{{ doc('client_id') }} Contracts are in `stg_clients__client_contracts`."
+        description: "{{ doc('client_id') }} Contracts are in `stg_global_transactions__client_contracts`."
         tests:
           - not_null
           # NB: data quality gap. The source supplies no client master data, so client IDs can only be checked for format, not for existence. With a client list, this would be a relationships test to it.
@@ -174,7 +174,7 @@ models:
           # NB: data quality gap. The source supplies no currency reference data, so currencies are checked against those that have exchange rates.
           - relationships:
               arguments:
-                to: ref('stg_currencies__currency_rates')
+                to: ref('stg_global_transactions__currency_rates')
                 field: currency
 
       - name: linked_transaction_id
@@ -190,12 +190,17 @@ models:
                 where: "transaction_type != 'refund'"
           - dbt_utils.relationships_where: # refunds must link to a payment, not any transaction
               arguments:
-                to: ref('stg_transactions__transactions')
+                to: ref('stg_global_transactions__transactions')
                 field: transaction_id
                 to_condition: "transaction_type = 'payment'"
-          - unique: # NB: refunds are always for the full payment amount, so a payment refunded twice is a duplicate. Warns because the raw data contains these; int__transactions flags and excludes them.
+          # NB: refunds are always for the full payment amount, so a payment refunded twice is a duplicate.
+          # The raw data has 6 such payments, flagged by is_duplicate_refund and excluded from revenue and spend.
+          # The test accepts those known 6 and errors on any new ones; failing rows are stored for audit.
+          - unique:
               config:
-                severity: warn
+                warn_if: "> 6"
+                error_if: "> 6"
+                store_failures: true
 
 
       - name: is_duplicate_refund
@@ -212,7 +217,7 @@ models:
               config:
                 where: "transaction_type != 'refund'"
 
-  - name: stg_transactions__transaction_resolutions
+  - name: stg_global_transactions__transaction_resolutions
     description: "Staged chargeback resolution statuses, from the raw `transaction_resolutions` source table."
     columns:
       - name: transaction_id
@@ -222,7 +227,7 @@ models:
           - not_null
           - dbt_utils.relationships_where: # resolutions only apply to chargebacks
               arguments:
-                to: ref('stg_transactions__transactions')
+                to: ref('stg_global_transactions__transactions')
                 field: transaction_id
                 to_condition: "transaction_type = 'chargeback'"
 
