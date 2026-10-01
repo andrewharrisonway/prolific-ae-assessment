@@ -1,44 +1,29 @@
 WITH RECURSIVE
 
-/* IMPORTS */
-
-transactions AS (
-    SELECT
-        transaction_date
-        , resolution_date
-    FROM
-        {{ ref('int__transactions') }}
-)
-
 /* TRANSFORMATIONS */
 
-, date_bounds AS (
-    -- NOTE: whole months, from the first month with a transaction to the last
-    -- month with any activity (transactions or chargeback resolutions)
-    SELECT
-        DATE(MIN(transaction_date), 'start of month') AS first_date
-        , DATE(
-            MAX(MAX(transaction_date), MAX(COALESCE(resolution_date, '')))
-            , 'start of month'
-            , '+1 month'
-            , '-1 day'
-        ) AS last_date
-    FROM
-        transactions
-)
+/*
+LOGIC/CHOICES:
 
-, date_spine AS (
-    SELECT first_date AS date_day
-    FROM date_bounds
+A fixed daily spine between the date_spine_start_date and date_spine_end_date
+project vars (end exclusive). It does not depend on the data, so it covers any
+period a model or MetricFlow needs, including comparisons across years; models
+limit it to the period they report on.
+
+NB: not dbt_utils.date_spine, which fails on SQLite: dbt-sqlite's dateadd macro
+errors ("no such column: day") and its datediff macro is disabled.
+*/
+
+date_spine AS (
+    SELECT DATE('{{ var("date_spine_start_date") }}') AS date_day
 
     UNION ALL
 
-    SELECT DATE(dsp.date_day, '+1 day') AS date_day
+    SELECT DATE(date_day, '+1 day') AS date_day
     FROM
-        date_spine AS dsp
-    INNER JOIN
-        date_bounds AS dbd
-        ON dsp.date_day < dbd.last_date
+        date_spine
+    WHERE
+        date_day < DATE('{{ var("date_spine_end_date") }}', '-1 day')
 )
 
 , output_cte AS (

@@ -12,6 +12,12 @@ seed-paths: ["seeds"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
+vars:
+  # Bounds of the dim_dates spine (end date exclusive). Fixed rather than taken
+  # from the data, and wide enough for MetricFlow comparisons across years.
+  date_spine_start_date: '2020-01-01'
+  date_spine_end_date: '2031-01-01'
+
 clean-targets:
   - "target"
   - "dbt_packages"

@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: dim_dates
-    description: "One row per day, covering whole months from the first month with a transaction to the last month with any activity. Generated from the data, and used as the month spine for `fct_client_monthly_revenue` and as the MetricFlow time spine."
+    description: "One row per day, from 2020-01-01 to 2030-12-31 (set by the `date_spine_start_date` and `date_spine_end_date` project vars). A fixed spine, independent of the data: the month spine for `fct_client_monthly_revenue`, which limits it to the months the data covers, and the MetricFlow time spine. The relationships tests on `fct_transactions` dates check it covers the data."
     time_spine:
       standard_granularity_column: date_day
     columns:
@@ -110,7 +110,7 @@ models:
         description: "{{ doc('revenue_gbp') }}"
 
   - name: fct_client_monthly_revenue
-    description: "One row per client per month: recognised revenue and GMV in GBP, the same figures by transaction month, chargebacks pending at month end, and contract spend threshold and discount tracking. Every client appears in every month of `dim_dates`. GBP amounts are unrounded."
+    description: "One row per client per month: recognised revenue and GMV in GBP, the same figures by transaction month, chargebacks pending at month end, and contract spend threshold and discount tracking. Every client appears in every month the data covers (from the first transaction to the last activity). GBP amounts are unrounded."
     columns:
       - name: client_month_id
         description: "Primary key: surrogate key from `client_id` and `month_start_date`."
