@@ -17,7 +17,7 @@ currency_rates AS (
         currency
         , rate_date
     FROM
-        {{ ref('stg_currencies__currency_rates') }}
+        {{ ref('stg_global_transactions__currency_rates') }}
 )
 
 /* TRANSFORMATIONS */
