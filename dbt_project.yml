@@ -20,10 +20,10 @@ models:
   global_transactions:
     staging:
       +materialized: table
-      # +schema: staging # commented out as SQLite does not have true schema support 
+      # +schema: staging # NB: not used. dbt-sqlite maps each schema to its own attached .db file, and SQLite views cannot reference tables in another attached database, so intermediate views could not read staging tables
     intermediate:
       +materialized: view
-      # +schema: intermediate # commented out as SQLite does not have true schema support 
+      # +schema: intermediate # NB: not used. dbt-sqlite maps each schema to its own attached .db file, and SQLite views cannot reference tables in another attached database, so intermediate views could not read staging tables
     marts:
       +materialized: table
-      # +schema: marts # commented out as SQLite does not have true schema support 
+      # +schema: marts # NB: not used. dbt-sqlite maps each schema to its own attached .db file, and SQLite views cannot reference tables in another attached database, so intermediate views could not read staging tables

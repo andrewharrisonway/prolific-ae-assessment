@@ -159,7 +159,7 @@ Column aliases (`AS transaction_amount_gbp`) are a separate thing: always use `A
 | Dates | `_date` suffix | `transaction_date`, `resolution_date` |
 | Keys | `_id` suffix | `client_id`, `linked_transaction_id` |
 
-Use the business's vocabulary: these are **clients**, not customers. (The `staging/customers/` folder predates this rule; don't propagate it.)
+Use the business's vocabulary: these are **clients**, not customers.
 
 ## SQLite specifics
 
@@ -173,6 +173,8 @@ The warehouse is SQLite, which shapes several choices:
 - **No date_trunc or regex.** Use `DATE(d, 'start of month')` for month buckets, `DATE(d, '+N months')` for offsets, and `GLOB` patterns for format tests.
 - **Types are affinities.** `CAST(x AS numeric(8, 2))` doesn't enforce precision; keep the precision anyway as documentation, but make it valid (precision ≥ scale) so it ports to another warehouse.
 - **No hash functions.** SQLite has no `md5()`, so `macros/sqlite__hash.sql` overrides the adapter's hash: on SQLite, surrogate keys are the readable input string (e.g. `GBP-2024-01-01`), and other adapters still use md5. Always generate keys with `dbt_utils.generate_surrogate_key`, never by concatenating columns by hand, so they stay portable.
+- **Cast dates to text: `CAST(DATE(x) AS text)`.** SQLite stores dates as ISO text. A bare `DATE(x)` column has no declared type, so dbt unit-test fixtures cast it as `UNKNOWN` and SQLite turns `'2024-01-01'` into the number `2024`. Never `CAST(x AS date)` either: that has numeric affinity and does the same.
+- **Check dbt_utils tests that do date arithmetic.** `dbt_utils.sequential_values` cannot work on SQLite (its `CAST(... AS timestamp)` reduces dates to their year, so it never fails). Confirm a new generic test can actually fail before relying on it.
 - **No schemas.** Everything lands in `main`; layers are separated by folder and name prefix only.
 
 ## Documenting decisions in code

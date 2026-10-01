@@ -2,7 +2,8 @@ version: 2
 
 models:
   - name: stg_currencies__currency_rates
-    description: "Staged daily currency exchange rates, from the raw `currency_rates` source table. rate_to_gbp expresses how many GBP one unit of `currency` is worth on `rate_date`."
+    description: "Staged daily currency exchange rates, from the raw `currency_rates` source table. `exchange_rate_to_gbp` expresses how many GBP one unit of `currency` is worth on `rate_date`."
+    # NB: daily rate completeness is tested in tests/assert_currency_rates_are_daily.sql
     columns:
       - name: currency_rate_id
         description: "Primary key: surrogate key for one currency on one date, generated with `dbt_utils.generate_surrogate_key` from `currency` and `rate_date`. On SQLite it is the readable input string (e.g. `GBP-2024-01-01`) rather than an md5 hash; see `macros/sqlite__hash.sql`."
@@ -14,6 +15,9 @@ models:
         description: "ISO currency code."
         tests:
           - not_null
+          - dbt_utils.expression_is_true: # NB: this would normally be a regex test, but is limited by sqlite
+              arguments:
+                expression: "GLOB '[A-Z][A-Z][A-Z]'"
 
       - name: rate_date
         description: "Date this exchange rate applies to."

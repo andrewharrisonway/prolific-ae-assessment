@@ -3,6 +3,10 @@ version: 2
 models:
   - name: int__transactions
     description: "One row per transaction, converted to GBP, with contract discounts applied and revenue calculated. Transaction type behaviour comes from the `transaction_types` seed."
+    tests:
+      - dbt_utils.equal_rowcount: # one row per staged transaction: catches joins that fan out or drop rows
+          arguments:
+            compare_model: ref('stg_transactions__transactions')
     columns:
       - name: transaction_id
         description: "Unique transaction identifier; primary key of this model."
@@ -66,7 +70,7 @@ models:
                 quote: false
 
       - name: is_spend_qualifying
-        description: "1 if this transaction counts toward cumulative contract spend (before the contract window is applied). Duplicate refunds never count."
+        description: "1 if this transaction's type and status count toward cumulative contract spend; duplicate refunds never count. Contract rules are applied afterwards, when spend is accumulated: only transactions inside the contract window count, and a refund only counts if the payment it reverses was inside the window."
         tests:
           - not_null
           - accepted_values:
@@ -78,8 +82,23 @@ models:
         description: "Fee margin applied: the contracted discounted margin once the spend threshold is reached within the contract term, otherwise the platform fee margin."
         tests:
           - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+                inclusive: true
 
       - name: revenue_gbp
         description: "Platform revenue in GBP: `net_amount_gbp * applicable_fee_margin` when `is_revenue_recognised`, otherwise 0."
         tests:
           - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "<= 0"
+              config:
+                where: "transaction_type = 'refund'"
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+              config:
+                where: "transaction_type != 'refund'"

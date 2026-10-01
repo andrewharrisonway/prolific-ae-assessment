@@ -52,7 +52,7 @@ models/
 ├── raw/            sources.yml: declares the raw tables loaded from seeds/raw/
 ├── staging/        one model per source: typing, renaming, date fixes, tests
 │   ├── currencies/
-│   ├── customers/
+│   ├── clients/
 │   └── transactions/
 ├── intermediate/   int__transactions: GBP conversion, contract discounts, revenue per transaction
 └── marts/          monthly revenue by client (in progress)

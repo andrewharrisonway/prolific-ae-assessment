@@ -20,7 +20,7 @@ models:
                 where: "transaction_type = 'chargeback'"
 
       - name: client_id
-        description: "Client identifier, FK to NAME CLIENT TABLE"
+        description: "Client identifier. There is no client dimension; contracts exist for some clients only (see `stg_clients__client_contracts`)."
         tests:
           - not_null
           - dbt_utils.expression_is_true: # NB: this would normally be a regex test, but is limited by sqlite
@@ -28,7 +28,7 @@ models:
                 expression: "GLOB 'C[0-9][0-9][0-9]'" # NB: this should have a relationship test to client table but none exists
 
       - name: transaction_amount
-        description: "Transaction amount in its original currency (see `currency`)."
+        description: "Transaction amount in its original currency (see `transaction_currency`)."
         tests:
           - not_null
           - dbt_utils.expression_is_true: # ASSUMPTION: all transaction amounts are positive
@@ -90,10 +90,11 @@ models:
                 expression: "is null"
               config:
                 where: "transaction_type != 'refund'"
-          - relationships:
+          - dbt_utils.relationships_where: # refunds must link to a payment, not any transaction
               arguments:
                 to: ref('stg_transactions__transactions')
                 field: transaction_id
+                to_condition: "transaction_type = 'payment'"
           - unique: # NB: refunds are always for the full payment amount, so a payment refunded twice is a duplicate. Warns because the raw data contains these; int__transactions flags and excludes them.
               config:
                 severity: warn
@@ -117,14 +118,15 @@ models:
     description: "Staged chargeback resolution statuses, from the raw `transaction_resolutions` source table."
     columns:
       - name: transaction_id
-        description: "References the transaction_id this resolution applies to."
+        description: "References the transaction_id of the chargeback this resolution applies to."
         tests:
           - unique
           - not_null
-          - relationships:
+          - dbt_utils.relationships_where: # resolutions only apply to chargebacks
               arguments:
                 to: ref('stg_transactions__transactions')
                 field: transaction_id
+                to_condition: "transaction_type = 'chargeback'"
 
       - name: resolution_status
         description: "Chargeback resolution status."

@@ -34,7 +34,7 @@ transactions AS (
         , spend_threshold
         , discounted_fee_margin
     FROM
-        {{ ref('stg_customers__client_contracts') }}
+        {{ ref('stg_clients__client_contracts') }}
 )
 
 , transaction_resolutions AS (

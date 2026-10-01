@@ -16,7 +16,7 @@ raw_input AS (
         , CAST(platform_fee_margin AS numeric(1, 2)) AS platform_fee_margin
         , CAST(currency AS varchar(3)) AS transaction_currency
         , CAST(linked_transaction_id AS varchar(10)) AS linked_transaction_id
-        , DATE(transaction_date) AS transaction_date
+        , CAST(DATE(transaction_date) AS text) AS transaction_date
     FROM raw_input
 )
 
