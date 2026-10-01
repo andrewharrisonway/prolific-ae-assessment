@@ -1,5 +1,7 @@
 # Global Transactions
 
+[![dbt CI](https://github.com/andrewharrisonway/prolific-ae-assessment/actions/workflows/dbt_ci.yml/badge.svg?branch=main)](https://github.com/andrewharrisonway/prolific-ae-assessment/actions/workflows/dbt_ci.yml)
+
 A dbt project that models transaction data for a global marketplace: staging and cleaning the raw sources, converting all amounts to GBP, applying contracted platform fee discounts, and producing monthly revenue recognition by client.
 
 The original brief is in [task_instructions.md](task_instructions.md).
@@ -31,6 +33,10 @@ dbt build
 Everything is written to a SQLite database at `target/global_transactions.db`, which is created on the first run. The database is disposable: `dbt clean` deletes it (along with installed packages), and `dbt deps` followed by `dbt seed` rebuilds it.
 
 Run `dbt seed` before `dbt build`. Models read the raw tables through `source()`, which creates no dependency on the seeds in dbt's graph, so on a fresh database `dbt build` alone runs the staging models before the raw tables exist, and they fail.
+
+### Continuous integration
+
+[`.github/workflows/dbt_ci.yml`](.github/workflows/dbt_ci.yml) runs on every push to `main` and every pull request: it follows the setup steps above on a clean machine, then runs `dbt seed`, `dbt build` (every model and test) and `sqlfluff lint`. It can also be run manually from the Actions tab.
 
 ### Why the raw data is loaded as seeds
 

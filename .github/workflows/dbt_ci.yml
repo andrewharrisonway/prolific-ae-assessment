@@ -1,0 +1,45 @@
+name: dbt CI
+
+# Builds the project from a clean checkout, following the README's setup steps,
+# then runs every test and the SQL linter.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies (as in the README)
+        run: |
+          pip install uv
+          uv venv dbt-env --python 3.11
+          source dbt-env/bin/activate
+          uv pip install -r requirements.txt
+          echo "$PWD/dbt-env/bin" >> "$GITHUB_PATH"
+
+      - name: Install dbt packages
+        run: dbt deps
+
+      # Raw data is loaded before building: models read it through source(),
+      # which creates no dependency on the seeds in dbt's graph.
+      - name: Load raw data
+        run: dbt seed
+
+      - name: Build and test
+        run: dbt build
+
+      - name: Lint SQL
+        run: sqlfluff lint models tests
