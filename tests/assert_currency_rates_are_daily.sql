@@ -1,13 +1,3 @@
-/*
-Exchange rates must be daily, with no gaps, for each currency.
-int__transactions carries the last available rate forward, which would
-silently hide a missing day.
-
-NB: a singular test because dbt_utils.sequential_values cannot work on SQLite:
-its date arithmetic fails, and its CAST(... AS timestamp) reduces every date
-to its year, so it would never detect a gap.
-*/
-
 WITH
 
 /* IMPORTS */

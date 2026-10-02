@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: global_transactions
-    description: "Raw assessment data, loaded into the warehouse by `dbt seed` from seeds/raw/ (standing in for an extract-and-load tool)."
+    description: "Raw assessment data, loaded into the warehouse by `dbt seed` from seeds/raw/ (standing in for an extract-and-load tool). Freshness is not configured because the seeds are static; with a real loader, a `loaded_at_field` and freshness thresholds would be set here. Columns are tested on the staging models, which pass them through, rather than here: each column is tested once."
     schema: main
     tables:
       - name: transactions

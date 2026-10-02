@@ -6,7 +6,7 @@ models:
     columns:
       - name: client_id
         description: "{{ doc('client_id') }} One contract per client."
-        tests:
+        data_tests:
           - unique
           - not_null
           # NB: data quality gap. The source supplies no client master data, so client IDs can only be checked for format, not for existence. With a client list, this would be a relationships test to it.
@@ -16,12 +16,12 @@ models:
 
       - name: contract_start_date
         description: "{{ doc('contract_start_date') }}"
-        tests:
+        data_tests:
           - not_null
 
       - name: contract_duration_months
         description: "{{ doc('contract_duration_months') }}"
-        tests:
+        data_tests:
           - not_null
           - dbt_utils.accepted_range:
               arguments:
@@ -30,7 +30,7 @@ models:
 
       - name: spend_threshold
         description: "{{ doc('spend_threshold') }}"
-        tests:
+        data_tests:
           - not_null
           - dbt_utils.accepted_range:
               arguments:
@@ -39,7 +39,7 @@ models:
 
       - name: discounted_fee_margin
         description: "{{ doc('discounted_fee_margin') }}"
-        tests:
+        data_tests:
           - not_null
 
           # Range: hard bound
@@ -64,13 +64,13 @@ models:
     columns:
       - name: currency_rate_id
         description: "Primary key: surrogate key for one currency on one date, generated with `dbt_utils.generate_surrogate_key` from `currency` and `rate_date`. On SQLite it is the readable input string (e.g. `GBP-2024-01-01`) rather than an md5 hash; see `macros/sqlite__hash.sql`."
-        tests:
+        data_tests:
           - unique
           - not_null
 
       - name: currency
         description: "ISO currency code."
-        tests:
+        data_tests:
           - not_null
           - dbt_utils.expression_is_true: # NB: this would normally be a regex test, but is limited by sqlite
               arguments:
@@ -78,12 +78,12 @@ models:
 
       - name: rate_date
         description: "Date this exchange rate applies to."
-        tests:
+        data_tests:
           - not_null
 
       - name: exchange_rate_to_gbp
         description: "Multiplier to convert one unit of currency into GBP (e.g. amount_in_currency * exchange_rate_to_gbp = amount_in_gbp)."
-        tests:
+        data_tests:
           - not_null
           - dbt_utils.accepted_range:
               arguments:
@@ -102,7 +102,7 @@ models:
     columns:
       - name: transaction_id
         description: "{{ doc('transaction_id') }}"
-        tests:
+        data_tests:
           - unique
           - not_null
           - dbt_utils.expression_is_true: # NB: this would normally be a regex test, but is limited by sqlite
@@ -117,7 +117,7 @@ models:
 
       - name: client_id
         description: "{{ doc('client_id') }} Contracts are in `stg_global_transactions__client_contracts`."
-        tests:
+        data_tests:
           - not_null
           # NB: data quality gap. The source supplies no client master data, so client IDs can only be checked for format, not for existence. With a client list, this would be a relationships test to it.
           - dbt_utils.expression_is_true: # NB: GLOB, as SQLite has no regex
@@ -126,7 +126,7 @@ models:
 
       - name: transaction_amount
         description: "Transaction amount in its original currency (see `transaction_currency`)."
-        tests:
+        data_tests:
           - not_null
           - dbt_utils.expression_is_true: # ASSUMPTION: all transaction amounts are positive
               arguments:
@@ -134,7 +134,7 @@ models:
 
       - name: transaction_type
         description: "{{ doc('transaction_type') }}"
-        tests:
+        data_tests:
           - not_null
           - relationships: # NB: valid types and their behaviour are defined in the transaction_types seed
               arguments:
@@ -143,12 +143,12 @@ models:
 
       - name: transaction_date
         description: "{{ doc('transaction_date') }}"
-        tests:
+        data_tests:
           - not_null # NB: captures dates that are nulled via the `date()` function for being malformed or missing
 
       - name: platform_fee_margin
         description: "Platform fee margin applied to this transaction."
-        tests:
+        data_tests:
           - not_null
 
           # Range: hard bound
@@ -169,7 +169,7 @@ models:
 
       - name: transaction_currency
         description: "{{ doc('transaction_currency') }}"
-        tests:
+        data_tests:
           - not_null
           # NB: data quality gap. The source supplies no currency reference data, so currencies are checked against those that have exchange rates.
           - relationships:
@@ -179,7 +179,7 @@ models:
 
       - name: linked_transaction_id
         description: "For refunds, references the transaction_id of the original payment being refunded. Null for all other transaction types."
-        tests:
+        data_tests:
           - not_null:
               config:
                 where: "transaction_type = 'refund'"
@@ -205,7 +205,7 @@ models:
 
       - name: is_duplicate_refund
         description: "{{ doc('is_duplicate_refund') }}"
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               arguments:
@@ -222,7 +222,7 @@ models:
     columns:
       - name: transaction_id
         description: "References the transaction_id of the chargeback this resolution applies to."
-        tests:
+        data_tests:
           - unique
           - not_null
           - dbt_utils.relationships_where: # resolutions only apply to chargebacks
@@ -233,7 +233,7 @@ models:
 
       - name: resolution_status
         description: "{{ doc('resolution_status') }}"
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               arguments:
@@ -241,7 +241,7 @@ models:
 
       - name: resolution_date
         description: "{{ doc('resolution_date') }} Converted from `dd/mm/yyyy` to an ISO date."
-        tests:
+        data_tests:
           - not_null:
               config:
                 where: "resolution_status = 'resolved'"

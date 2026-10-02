@@ -1,6 +1,6 @@
 ---
 name: global-transactions-dbt
-description: SQL structure, naming, testing and workflow conventions for the global_transactions dbt project (SQLite). Use this skill whenever writing, editing, reviewing or debugging any model, schema.yml, source or test in this repo, including staging, intermediate and mart models, ad-hoc analysis queries against target/global_transactions.db, or questions about how revenue, GBP conversion, chargebacks or contract discounts are calculated, even if the user doesn't mention conventions or style.
+description: SQL structure, naming, testing and workflow conventions for the global_transactions dbt project (SQLite). Use this skill whenever writing, editing, reviewing or debugging any model, properties yml file, source, test or docs page in this repo, including staging, intermediate and mart models, ad-hoc analysis queries against target/global_transactions.db, or questions about how revenue, GBP conversion, chargebacks or contract discounts are calculated, even if the user doesn't mention conventions or style.
 ---
 
 # Global Transactions dbt conventions
@@ -169,7 +169,7 @@ Use the business's vocabulary: these are **clients**, not customers.
 The warehouse is SQLite, which shapes several choices:
 
 - **Use `CASE WHEN` for conditional logic.** It is portable across warehouses and SQLite versions.
-- **Views are not validated when created.** `dbt build` will succeed even if a view references a function that doesn't exist. After changing any view (the intermediate layer is materialised as views), run a query against it:
+- **Views are not validated when created.** `dbt build` will succeed even if a view references a function that doesn't exist. After changing any view (staging and intermediate are views), run a query against it:
   ```bash
   dbt show --inline "select count(*) from {{ ref('int__transactions') }}"
   ```
@@ -195,7 +195,11 @@ Any `ASSUMPTION:` that affects outputs also belongs in the README.
 
 ## Testing
 
-Every model has an entry in its folder's `schema.yml` with a model description and a description for every column.
+Every model has an entry in its folder's `_<directory>__models.yml` (e.g. `_marts__models.yml`; staging folders use the source name, `_global_transactions__models.yml`) with a model description and a description for every column. Generic tests go under `data_tests:`, not the older `tests:`, so they read differently from unit tests. Describe singular tests in `tests/_singular_tests.yml` (a `data_tests:` entry with a `description`), not in a comment at the top of the SQL.
+
+**Mark columns that can't be summed freely** with `config: meta: additivity:`. Use `semi_additive` for positions at a point in time, which can be summed across entities but not across time (e.g. `cumulative_contract_spend_gbp`), and `non_additive` for ratios and thresholds that should never be summed. Say what the tags mean in the model description.
+
+**The docs site home page is `models/docs/overview.md`** (`{% docs __overview__ %}`). Update it when models, key rules or known findings change.
 
 **Write a shared description once, as a doc block.** When a column is described in more than one place, its description lives in `models/docs/columns.md` (modelled layers) or `models/docs/raw_columns.md` (raw data as delivered), and each yml references it with `doc()`. Add model-specific context after the block, e.g. `"{{ doc('transaction_id') }} Primary key of this model."` or `"{{ doc('client_id') }} Passed through from staging, where it is tested."`. A description used in one place only stays inline. Copies of the same description drift apart over time; a doc block can't.
 
@@ -230,4 +234,4 @@ Use the project venv (`source dbt-env/bin/activate`; setup is in the README). Af
 
 **Raw data comes from `seeds/raw/`, but models read it through `source()`, never `ref()`.** Those seeds stand in for an extract-and-load tool. Genuine reference data (e.g. `transaction_types`) lives in `seeds/reference/` and is read with `ref()`. On a fresh database, run `dbt seed` before `dbt build`, because sources create no dependency on the seeds. `target/global_transactions.db` is disposable: `dbt clean` deletes it (and installed packages); `dbt deps` then `dbt seed` rebuilds it.
 
-Layer materialisations are set in `dbt_project.yml` (staging: table, intermediate: view, marts: table). Don't override them per model without a stated reason.
+Layer materialisations are set in `dbt_project.yml` (staging: view, intermediate: view, marts: table), following dbt's recommendation. Don't override them per model without a stated reason.

@@ -9,30 +9,30 @@ models:
       - name: date_day
         description: "Calendar date. Primary key of this model."
         granularity: day
-        tests:
+        data_tests:
           - unique
           - not_null
 
       - name: month_start_date
         description: "{{ doc('month_start_date') }}"
-        tests:
+        data_tests:
           - not_null
 
       - name: month_end_date
         description: "{{ doc('month_end_date') }}"
-        tests:
+        data_tests:
           - not_null
 
   - name: fct_transactions
     description: "One row per transaction: amounts in GBP, revenue, recognition date and contract spend. The transaction-grain fact for reporting, and the model the semantic layer is defined on. Built from `int__transactions`, where every column is tested."
-    tests:
+    data_tests:
       - dbt_utils.equal_rowcount:
           arguments:
             compare_model: ref('int__transactions')
     columns:
       - name: transaction_id
         description: "{{ doc('transaction_id') }} Primary key of this model."
-        tests:
+        data_tests:
           - unique
           - not_null
 
@@ -47,7 +47,7 @@ models:
 
       - name: transaction_date
         description: "{{ doc('transaction_date') }}"
-        tests:
+        data_tests:
           - relationships: # every transaction date must be covered by the date spine
               arguments:
                 to: ref('dim_dates')
@@ -61,7 +61,7 @@ models:
 
       - name: recognition_date
         description: "{{ doc('recognition_date') }}"
-        tests:
+        data_tests:
           - relationships: # every recognition date must be covered by the date spine
               arguments:
                 to: ref('dim_dates')
@@ -110,11 +110,11 @@ models:
         description: "{{ doc('revenue_gbp') }}"
 
   - name: fct_client_monthly_revenue
-    description: "One row per client per month: recognised revenue and GMV in GBP, the same figures by transaction month, chargebacks pending at month end, and contract spend threshold and discount tracking. Every client appears in every month the data covers (from the first transaction to the last activity). GBP amounts are unrounded."
+    description: "One row per client per month: recognised revenue and GMV in GBP, the same figures by transaction month, chargebacks pending at month end, and contract spend threshold and discount tracking. Every client appears in every month the data covers (from the first transaction to the last activity). GBP amounts are unrounded. Columns tagged `meta.additivity: semi_additive` are positions as at month end: they can be summed across clients but not across months. Columns tagged `non_additive` should never be summed."
     columns:
       - name: client_month_id
         description: "Primary key: surrogate key from `client_id` and `month_start_date`."
-        tests:
+        data_tests:
           - unique
           - not_null
 
@@ -123,7 +123,7 @@ models:
 
       - name: month_start_date
         description: "{{ doc('month_start_date') }} The month this row reports on."
-        tests:
+        data_tests:
           - relationships:
               arguments:
                 to: ref('dim_dates')
@@ -134,7 +134,7 @@ models:
 
       - name: is_partial_month
         description: "1 if the data ends before this month does. July 2024 is partial: the data ends on 6 July and the month contains refunds only."
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               arguments:
@@ -143,67 +143,79 @@ models:
 
       - name: recognised_gross_gmv_gbp
         description: "Money in (payments and resolved chargebacks) recognised this month, in GBP, before refunds."
-        tests:
+        data_tests:
           - not_null
 
       - name: recognised_net_gmv_gbp
         description: "Total GMV recognised this month, in GBP: money in less refunds. Fraud, pending chargebacks and duplicate refunds are excluded. Chargebacks count in the month they resolve."
-        tests:
+        data_tests:
           - not_null
 
       - name: recognised_revenue_gbp
         description: "Platform revenue recognised this month, in GBP. The headline revenue measure. Chargebacks count in the month they resolve, so a closed month never changes."
-        tests:
+        data_tests:
           - not_null
 
       - name: recognised_transaction_count
         description: "Number of transactions recognised this month."
-        tests:
+        data_tests:
           - not_null
 
       - name: originated_net_gmv_gbp
         description: "Net GMV in GBP for the transactions that happened this month, counting chargebacks resolved as of the latest data. Past months are restated as chargebacks resolve."
-        tests:
+        data_tests:
           - not_null
 
       - name: originated_revenue_gbp
         description: "Revenue in GBP for the transactions that happened this month, on the same basis as `originated_net_gmv_gbp`."
-        tests:
+        data_tests:
           - not_null
 
       - name: pending_chargebacks_gbp
+        config:
+          meta:
+            additivity: semi_additive
         description: "Chargebacks that had happened but were not yet resolved at month end, in GBP: the revenue still outstanding at that point."
-        tests:
+        data_tests:
           - not_null
 
       - name: contract_status
         description: "Contract status at month end: `no contract`, `not started`, `active` or `ended`."
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ['no contract', 'not started', 'active', 'ended']
 
       - name: spend_threshold
+        config:
+          meta:
+            additivity: non_additive
         description: "{{ doc('spend_threshold') }} Null for clients without a contract."
 
       - name: monthly_contract_spend_gbp
         description: "Contract spend added this month, in GBP: the sum of `contract_spend_gbp` for transactions that take effect this month. Null for clients without a contract."
-        tests:
+        data_tests:
           - not_null:
               config:
                 where: "contract_status != 'no contract'"
 
       - name: cumulative_contract_spend_gbp
+        config:
+          meta:
+            additivity: semi_additive
         description: "Contract spend to date at month end, in GBP. Compared against `spend_threshold`. Null for clients without a contract."
-        tests:
+        data_tests:
           - not_null:
               config:
                 where: "contract_status != 'no contract'"
 
       - name: pct_of_spend_threshold
+        config:
+          meta:
+            additivity: non_additive
         description: "`cumulative_contract_spend_gbp` as a fraction of `spend_threshold` (1 = threshold reached). Null for clients without a contract."
-        tests:
+        data_tests:
           - not_null:
               config:
                 where: "contract_status != 'no contract'"
@@ -213,7 +225,7 @@ models:
 
       - name: is_discount_active
         description: "1 if the discounted margin applies at month end: the threshold has been reached and the contract is still active. Null for clients without a contract."
-        tests:
+        data_tests:
           - accepted_values:
               arguments:
                 values: [0, 1]
@@ -223,11 +235,14 @@ models:
                 where: "contract_status != 'no contract'"
 
       - name: naive_cumulative_gross_spend_gbp
+        config:
+          meta:
+            additivity: semi_additive
         description: "For comparison only, not a recommended definition: every transaction in the contract window at its gross amount, whatever its type (fraud and refunds included as positive), to date at month end. This naive measure reaches the threshold for C001 and C002, where the qualifying measure never does. Null for clients without a contract."
 
       - name: is_naive_threshold_reached
         description: "For comparison only: 1 if `naive_cumulative_gross_spend_gbp` has reached `spend_threshold`. Null for clients without a contract."
-        tests:
+        data_tests:
           - accepted_values:
               arguments:
                 values: [0, 1]

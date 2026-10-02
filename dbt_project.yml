@@ -25,12 +25,15 @@ clean-targets:
 
 models:
   global_transactions:
+    # dbt's recommended materialisations: staging and intermediate are views
+    # (cheap, and always current with what they read), marts are tables
+    # (what people query)
     staging:
-      +materialized: table
-      # +schema: staging # NB: not used. dbt-sqlite maps each schema to its own attached .db file, and SQLite views cannot reference tables in another attached database, so intermediate views could not read staging tables
+      +materialized: view
+      # +schema: staging # NB: not used. dbt-sqlite maps each schema to its own attached .db file, and SQLite views cannot reference objects in another attached database, so models in separate schemas could not read each other
     intermediate:
       +materialized: view
-      # +schema: intermediate # NB: not used. dbt-sqlite maps each schema to its own attached .db file, and SQLite views cannot reference tables in another attached database, so intermediate views could not read staging tables
+      # +schema: intermediate # NB: not used. dbt-sqlite maps each schema to its own attached .db file, and SQLite views cannot reference objects in another attached database, so models in separate schemas could not read each other
     marts:
       +materialized: table
-      # +schema: marts # NB: not used. dbt-sqlite maps each schema to its own attached .db file, and SQLite views cannot reference tables in another attached database, so intermediate views could not read staging tables
+      # +schema: marts # NB: not used. dbt-sqlite maps each schema to its own attached .db file, and SQLite views cannot reference objects in another attached database, so models in separate schemas could not read each other

@@ -1,0 +1,8 @@
+version: 2
+
+data_tests:
+  - name: assert_currency_rates_are_daily
+    description: "Exchange rates must be daily, with no gaps, for each currency. `int__transactions` carries the last available rate forward, which would silently hide a missing day. Returns each rate whose previous rate for the same currency is not the day before. A singular test because `dbt_utils.sequential_values` cannot work on SQLite: its date arithmetic fails, and its `CAST(... AS timestamp)` reduces every date to its year, so it would never detect a gap."
+
+  - name: assert_monthly_revenue_reconciles
+    description: "`fct_client_monthly_revenue` must reconcile to `fct_transactions`, per client: recognised and originated revenue and net GMV must both total to the transaction fact (the two bases hold the same transactions, timed differently), and contract spend to date in the last month must equal the transaction fact's total contract spend. Returns each client where any total differs by more than 0.001. A singular test because no generic test compares totals per group."

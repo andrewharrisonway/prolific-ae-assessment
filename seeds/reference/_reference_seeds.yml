@@ -13,13 +13,13 @@ seeds:
     columns:
       - name: transaction_type
         description: "{{ doc('transaction_type') }} Primary key of this seed."
-        tests:
+        data_tests:
           - unique
           - not_null
 
       - name: amount_direction
         description: "{{ doc('amount_direction') }}"
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               arguments:
@@ -28,7 +28,7 @@ seeds:
 
       - name: recognises_revenue
         description: "1 if this type generates platform revenue."
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               arguments:
@@ -37,7 +37,7 @@ seeds:
 
       - name: counts_toward_spend
         description: "1 if this type counts toward a client's cumulative contract spend."
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               arguments:
@@ -46,7 +46,7 @@ seeds:
 
       - name: requires_resolution
         description: "1 if this type only counts once resolved (see `stg_global_transactions__transaction_resolutions`)."
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               arguments:

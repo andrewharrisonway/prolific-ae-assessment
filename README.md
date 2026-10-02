@@ -34,6 +34,15 @@ Everything is written to a SQLite database at `target/global_transactions.db`, w
 
 Run `dbt seed` before `dbt build`. Models read the raw tables through `source()`, which creates no dependency on the seeds in dbt's graph, so on a fresh database `dbt build` alone runs the staging models before the raw tables exist, and they fail.
 
+### Documentation site
+
+The generated docs site has an overview page, the lineage graph, and descriptions of every model, column and test:
+
+```bash
+dbt docs generate
+dbt docs serve
+```
+
 ### Continuous integration
 
 [`.github/workflows/dbt_ci.yml`](.github/workflows/dbt_ci.yml) runs on every push to `main` and every pull request: it follows the setup steps above on a clean machine, then runs `dbt seed`, `dbt build` (every model and test) and `sqlfluff lint`. It can also be run manually from the Actions tab.
@@ -55,7 +64,7 @@ seeds/
 macros/
 └── sqlite__hash.sql   makes surrogate keys work on SQLite, which has no md5()
 models/
-├── docs/           shared column descriptions (dbt doc blocks), used across the yml files
+├── docs/           shared column descriptions (dbt doc blocks) and the docs site overview page
 ├── staging/
 │   └── global_transactions/   one folder per source system: the source definition
 │                              (_global_transactions__sources.yml), one staging model
@@ -63,12 +72,12 @@ models/
 ├── intermediate/   int__client_contracts: contract windows
 │                   int__transactions: GBP conversion, contract discounts, revenue per transaction
 └── marts/          dim_dates, fct_transactions, fct_client_monthly_revenue, semantic layer
-tests/              singular tests: daily exchange rates, monthly mart reconciliation
+tests/              singular tests (daily exchange rates, monthly mart reconciliation) and their descriptions
 ```
 
 | Layer | Materialisation | Purpose |
 |---|---|---|
-| staging | table | Clean and type each source; the bulk of data quality testing lives here |
+| staging | view | Clean and type each source table; most data quality testing lives here |
 | intermediate | view | Transaction-grain business logic |
 | marts | table | Reporting outputs: facts (`fct_`) and dimensions (`dim_`) |
 
@@ -129,7 +138,7 @@ How each transaction type behaves is defined as data in the [`transaction_types`
 
 `int__transactions` keeps both the recorded amount (`gross_amount_*`, always positive) and the signed amount (`net_amount_*`). Revenue is `net_amount_gbp × applicable_fee_margin` for recognised transactions, and 0 otherwise.
 
-With four types, a seed is more structure than strictly needed. It is used deliberately: the business rules sit in one reviewable file, the staging model validates transaction types against it, and adding or changing a type becomes a data change rather than a logic change.
+With four types, a seed is more structure than strictly needed. It is used deliberately: the business rules sit in one reviewable file, the staging model validates transaction types against it, and most of a type's behaviour (direction, revenue, spend, resolution) is data rather than logic. Rules specific to refunds, such as duplicate detection and the refund sign tests, still name the type in code.
 
 Every refund links to a payment from the same client, in the same currency, for exactly the full payment amount. Chargebacks have no linked transaction and are treated as standalone events.
 
@@ -170,7 +179,7 @@ Six payments are refunded more than once (one of them three times): 7 refunds in
 
 ## Testing
 
-Tests are defined in each layer's `schema.yml` and run with `dbt build` or `dbt test`. Coverage includes:
+Generic tests are defined under `data_tests:` in each folder's `_<directory>__models.yml` file, singular tests are described in `tests/_singular_tests.yml`, and all run with `dbt build` or `dbt test`. Coverage includes:
 
 - Uniqueness, not-null and ID format checks
 - Relationships between transactions, refunds, resolutions and currencies
@@ -182,7 +191,7 @@ Tests are defined in each layer's `schema.yml` and run with `dbt build` or `dbt 
 SQL style is enforced with SQLFluff (`.sqlfluff`):
 
 ```bash
-sqlfluff lint models
+sqlfluff lint models tests
 ```
 
 ## Status

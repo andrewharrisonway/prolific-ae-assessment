@@ -1,13 +1,3 @@
-/*
-fct_client_monthly_revenue must reconcile to fct_transactions, per client:
-- recognised and originated revenue and net GMV both total to the transaction
-  fact (the two bases hold the same transactions, timed differently)
-- contract spend to date in the last month equals the transaction fact's total
-  contract spend
-
-NB: a singular test because no generic test compares totals per group.
-*/
-
 WITH
 
 /* IMPORTS */

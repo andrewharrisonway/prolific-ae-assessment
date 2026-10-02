@@ -6,7 +6,7 @@ models:
     columns:
       - name: client_id
         description: "{{ doc('client_id') }} Primary key of this model."
-        tests:
+        data_tests:
           - unique
           - not_null
 
@@ -24,7 +24,7 @@ models:
 
       - name: contract_end_date
         description: "Date the contract ends (exclusive): `contract_start_date` plus `contract_duration_months` months."
-        tests:
+        data_tests:
           - not_null
           - dbt_utils.expression_is_true:
               arguments:
@@ -32,14 +32,14 @@ models:
 
   - name: int__transactions
     description: "One row per transaction, converted to GBP, with contract discounts applied and revenue calculated. Transaction type behaviour comes from the `transaction_types` seed."
-    tests:
+    data_tests:
       - dbt_utils.equal_rowcount: # one row per staged transaction: catches joins that fan out or drop rows
           arguments:
             compare_model: ref('stg_global_transactions__transactions')
     columns:
       - name: transaction_id
         description: "{{ doc('transaction_id') }} Primary key of this model."
-        tests:
+        data_tests:
           - unique
           - not_null
 
@@ -63,17 +63,17 @@ models:
 
       - name: net_amount_local
         description: "{{ doc('net_amount_local') }}"
-        tests:
+        data_tests:
           - not_null
 
       - name: gross_amount_gbp
         description: "{{ doc('gross_amount_gbp') }}"
-        tests:
+        data_tests:
           - not_null
 
       - name: net_amount_gbp
         description: "{{ doc('net_amount_gbp') }}"
-        tests:
+        data_tests:
           - not_null
           - dbt_utils.expression_is_true:
               arguments:
@@ -91,7 +91,7 @@ models:
 
       - name: is_revenue_recognised
         description: "{{ doc('is_revenue_recognised') }}"
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               arguments:
@@ -100,7 +100,7 @@ models:
 
       - name: is_spend_qualifying
         description: "{{ doc('is_spend_qualifying') }}"
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               arguments:
@@ -109,7 +109,7 @@ models:
 
       - name: applicable_fee_margin
         description: "{{ doc('applicable_fee_margin') }}"
-        tests:
+        data_tests:
           - not_null
           - dbt_utils.accepted_range:
               arguments:
@@ -125,7 +125,7 @@ models:
 
       - name: recognition_date
         description: "{{ doc('recognition_date') }}"
-        tests:
+        data_tests:
           - not_null:
               config:
                 where: "is_revenue_recognised = 1"
@@ -137,12 +137,12 @@ models:
 
       - name: spend_effective_date
         description: "{{ doc('spend_effective_date') }}"
-        tests:
+        data_tests:
           - not_null
 
       - name: is_in_contract_period
         description: "{{ doc('is_in_contract_period') }}"
-        tests:
+        data_tests:
           - accepted_values:
               arguments:
                 values: [0, 1]
@@ -150,14 +150,14 @@ models:
 
       - name: contract_spend_gbp
         description: "{{ doc('contract_spend_gbp') }}"
-        tests:
+        data_tests:
           - not_null:
               config:
                 where: "is_in_contract_period IS NOT NULL"
 
       - name: is_discount_earned
         description: "{{ doc('is_discount_earned') }}"
-        tests:
+        data_tests:
           - accepted_values:
               arguments:
                 values: [0, 1]
@@ -165,7 +165,7 @@ models:
 
       - name: revenue_gbp
         description: "{{ doc('revenue_gbp') }}"
-        tests:
+        data_tests:
           - not_null
           - dbt_utils.expression_is_true:
               arguments:
