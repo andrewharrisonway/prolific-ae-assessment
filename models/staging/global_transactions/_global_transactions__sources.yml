@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: global_transactions
-    description: "Raw assessment data, loaded into the warehouse by `dbt seed` from seeds/raw/ (standing in for an extract-and-load tool). Freshness is not configured because the seeds are static; with a real loader, a `loaded_at_field` and freshness thresholds would be set here. Columns are tested on the staging models, which pass them through, rather than here: each column is tested once."
+    description: "Raw assessment data, loaded into the warehouse by `dbt seed` from seeds/raw/ (standing in for an extract-and-load tool). Freshness is not configured, and no model is incremental, because no table has a load timestamp or updated-at column to act as a watermark; business dates such as `transaction_date` cannot stand in for one, since late-loaded rows would be missed. With a real loader, a `loaded_at_field` and freshness thresholds would be set here. Columns are tested on the staging models, which pass them through, rather than here: each column is tested once."
     schema: main
     tables:
       - name: transactions

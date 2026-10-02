@@ -20,6 +20,7 @@ The original brief is in [task_instructions.md](task_instructions.md).
 | Reverse a refund at its payment's margin but the refund date's exchange rate | The margin in effect on the refund date; the payment's exchange rate | The same margin applies both ways, so a full refund leaves no revenue behind except from exchange-rate movement; the client gets back the full amount in their own currency |
 | Flag duplicate refunds and exclude them from revenue and spend | Keep every refund as recorded | Every refund is for the full payment amount, so a second refund of the same payment cannot be genuine |
 | Load raw data with `dbt seed` but read it only through `source()` | Read the seeds with `ref()` | Keeps the models production-shaped: a real loader could replace the seeds with no model changes |
+| Rebuild every model in full on each run, with no source freshness checks | Incremental models; freshness thresholds on the sources | No source has a load timestamp or updated-at column to act as a watermark, so neither can be configured safely. See [Production considerations](#production-considerations) |
 
 **Key findings:** no contracted client reaches its discount threshold in the data provided; 7 duplicate refunds (£35,033 of revenue) are excluded; the source has no client or currency reference data; July 2024 is a partial month. See [Known findings](#known-findings).
 
@@ -230,11 +231,16 @@ Questions I would raise before relying on these figures, with the assumption the
 
 What I would change before running this on production data:
 
-- **Incremental processing.** Running contract spend and discount status are recalculated over every transaction on each run. At volume, `int_transactions_with_contract_spend` would need an incremental design: only contracts with new activity recalculated, or running totals persisted. The five chained intermediate views would become tables or incremental models; dbt_project_evaluator flags chains of views longer than 4.
+- **Freshness and incremental loading.** None of the sources has a watermark: there is no load timestamp, no updated-at column, and dates have no time. That rules out both features today:
+  - **Freshness:** there is no `loaded_at_field` to check.
+  - **Incremental models:** `transaction_date` is a business date, not a load time. A transaction loaded late for an earlier date would be skipped by a filter like `transaction_date > MAX(transaction_date)`.
+  - **Resolutions:** `transaction_resolutions` is updated in place (pending becomes resolved) with nothing recording when a row changed, so only a `check`-strategy snapshot could track it.
+
+  At 600 transactions the full build takes about 2.5 seconds, so a full rebuild is the right choice here. With a real loader, I would ask for a load timestamp on every table. Then I would configure source freshness and make `fct_transactions` incremental on that timestamp, with a lookback window for late data. Running contract spend is a window over each contract's whole history, so `int_transactions_with_contract_spend` would recalculate only the contracts with new activity, or persist running totals. The five chained intermediate views would become tables or incremental models; dbt_project_evaluator flags chains of views longer than 4.
 - **Late-arriving and changing data.** The recognised basis is stable as chargebacks resolve, but a late-arriving transaction, a corrected exchange rate or a changed resolution status would still restate a closed month. I would snapshot the resolutions and contracts tables (dbt snapshots) and agree with finance when a month is closed.
 - **Money types and rounding.** SQLite stores these amounts as floating point, which is why the reconciliation test needs a small tolerance. A production warehouse would use exact `NUMERIC` types, with a rounding policy agreed with finance (see the questions above).
 - **Transaction ordering.** Same-day transactions are ordered by `transaction_id`, but IDs are allocated in blocks by type, not in time order. Real timestamps would make the threshold-crossing transaction unambiguous.
-- **Data quality monitoring.** The duplicate-refund test accepts the 6 known cases; in production I would alert on new cases and fix them at source. With a real loader, source freshness checks would be configured.
+- **Data quality monitoring.** The duplicate-refund test accepts the 6 known cases; in production I would alert on new cases and fix them at source.
 - **Reference data.** A client master list would allow `relationships` tests on `client_id` and a client dimension.
 - **Semantic layer and contracts.** On a warehouse MetricFlow supports, the metrics would be queried and tested; the marts would get enforced model contracts, which SQLite cannot enforce.
 
