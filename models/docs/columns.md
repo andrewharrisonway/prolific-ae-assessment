@@ -66,7 +66,7 @@ Signed amount in GBP: negative for refunds, positive otherwise.
 {% enddocs %}
 
 {% docs applicable_fee_margin %}
-Fee margin applied: the contracted discounted margin once the spend threshold is reached within the contract term, otherwise the platform fee margin. A refund takes the margin its original payment was charged at, so a full refund reverses exactly the revenue the payment earned.
+Fee margin applied: the contracted discounted margin once the spend threshold is reached within the contract term, otherwise the platform fee margin. A refund takes the margin its original payment was charged at, so the discount status on the refund date never changes how much revenue it reverses.
 {% enddocs %}
 
 {% docs revenue_gbp %}

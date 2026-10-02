@@ -6,6 +6,25 @@ A dbt project that models transaction data for a global marketplace: staging and
 
 The original brief is in [task_instructions.md](task_instructions.md).
 
+## Summary for reviewers
+
+**What's here:** monthly revenue recognition by client, in GBP, with contract spend tracking and discount status. Raw data flows through staging, then one intermediate model per business step, into two facts. Start with **`fct_client_monthly_revenue`**; the [lineage](#lineage) and the dbt docs site (see [Documentation site](#documentation-site)) show how it is built.
+
+**Key decisions**
+
+| Decision | Alternative considered | Why |
+|---|---|---|
+| Recognise chargeback revenue in the month it resolves, and also report each transaction's original month | Transaction month only | The brief recognises only resolved chargebacks; this way past months don't move as chargebacks resolve |
+| Treat a resolved chargeback as positive revenue | Treat it as a reversal | No chargeback matches a payment or links to one, so they look like standalone events. The data has no outcome field, so this is an open question (see [Questions for stakeholders](#questions-for-stakeholders)) |
+| Apply the discount from the transaction that crosses the threshold, for the rest of the term | Back-date it to the start of the term | The most direct reading of the brief; also an open question |
+| Reverse a refund at its payment's margin but the refund date's exchange rate | The margin in effect on the refund date; the payment's exchange rate | The same margin applies both ways, so a full refund leaves no revenue behind except from exchange-rate movement; the client gets back the full amount in their own currency |
+| Flag duplicate refunds and exclude them from revenue and spend | Keep every refund as recorded | Every refund is for the full payment amount, so a second refund of the same payment cannot be genuine |
+| Load raw data with `dbt seed` but read it only through `source()` | Read the seeds with `ref()` | Keeps the models production-shaped: a real loader could replace the seeds with no model changes |
+
+**Key findings:** no contracted client reaches its discount threshold in the data provided; 7 duplicate refunds (£35,033 of revenue) are excluded; the source has no client or currency reference data; July 2024 is a partial month. See [Known findings](#known-findings).
+
+**How it's verified:** CI builds the project from a clean checkout and runs every test on each push (badge above). 129 data tests check every model, and 7 unit tests cover logic the real data never exercises (the discount, contract windows, refund margins, exchange-rate gaps, chargebacks moving between months). A reconciliation test checks the monthly mart against the transaction fact.
+
 ## Getting started
 
 ### Prerequisites
@@ -121,7 +140,7 @@ dim_dates (fixed spine, no parents) ──────────────�
 
 **Revenue is reported on two bases**, over the same recognised transactions:
 
-- **Recognised** (`recognised_*`), the headline: revenue lands in the month it is recognised, which for chargebacks is the month they resolve. A closed month never changes.
+- **Recognised** (`recognised_*`), the headline: revenue lands in the month it is recognised, which for chargebacks is the month they resolve. A month's figures don't change when its chargebacks later resolve (though late-arriving or corrected source data would still change them; see [Production considerations](#production-considerations)).
 - **Originated** (`originated_*`): revenue lands in the month the transaction happened, counting chargebacks resolved as of the latest data, so past months are restated as chargebacks resolve.
 - `pending_chargebacks_gbp` shows chargebacks still unresolved at each month end. Per client, the two bases total to the same figures; a singular test checks this against `fct_transactions`.
 
@@ -146,7 +165,7 @@ How each transaction type behaves is defined as data in the [`transaction_types`
 | `chargeback` | 1 | 1 | 1 | 1 |
 | `fraud` | 1 | 0 | 0 | 0 |
 
-- Refunds are negated, so they reduce both revenue and contract spend. A refund reverses revenue at the margin its original payment was charged at, not the margin in effect on the refund date, so a full refund nets to zero revenue even if the client's discount status changed in between.
+- Refunds are negated, so they reduce both revenue and contract spend. A refund reverses revenue at the margin its original payment was charged at, not the margin in effect on the refund date, so a full refund nets to zero revenue (apart from exchange-rate movement, below) even if the client's discount status changed in between.
 - Fraud contributes nothing to revenue or spend.
 - Chargebacks count only once resolved, and towards spend from their resolution date. Pending chargebacks contribute zero.
 
@@ -191,6 +210,33 @@ Six payments are refunded more than once (one of them three times): 7 refunds in
 - **No client or currency reference data.** The source supplies no client master data and no currency list. Client IDs can only be validated by format, not checked against a list of real clients, and currencies are checked against those that have exchange rates. This is treated as a data quality gap in what was supplied: a client dimension is deliberately not deduced from transaction data, because a list built from the transactions would always agree with them and so could never catch an unknown client.
 - **No discount triggers during the period of observation.** No contracted client reaches its spend threshold within the data provided, so the discounted margin is never applied. The logic is implemented as I understand the business rules, rather than adjusted to make the discount trigger. Because that seemed odd, I also tried a more naive calculation: every transaction in the contract window at its gross amount, whatever its type. It does reach the threshold, for C001 and C002 in June 2024, and it is exposed in `fct_client_monthly_revenue` (`naive_cumulative_gross_spend_gbp`, `is_naive_threshold_reached`) for comparison. It works, but I don't defend it from a business standpoint: it counts fraud and refunds as spend.
 
+## Questions for stakeholders
+
+Questions I would raise before relying on these figures, with the assumption the project currently makes:
+
+| Question | Assumption made | What would change |
+|---|---|---|
+| What does "resolved" mean for a chargeback, and in whose favour is it resolved? | Resolved means settled, and the chargeback counts as positive revenue in its resolution month | If resolved in the customer's favour, chargebacks would be reversals and reduce revenue |
+| Which currency is `spend_threshold` in? | GBP | In USD, thresholds would be lower in GBP terms, bringing clients closer to their discounts |
+| Once a client reaches its threshold, does the discount apply from then on, or back-dated to the start of the term? Can contracts have tiers? | From the transaction that crosses the threshold, for the rest of the term; one tier | Back-dating would require recalculating earlier months' revenue when the threshold is reached |
+| Can a client have more than one contract, e.g. on renewal? | One contract per client (tested) | Contract windows would need a contract key, not just the client |
+| Are fraud rows the fraudulent payments themselves? Should they count in GMV? | Fraud counts toward neither GMV, revenue nor spend | Gross GMV would include attempted fraud |
+| Are fees charged per transaction or invoiced monthly? | GBP amounts are rounded to pence per transaction; revenue is left unrounded | Revenue would be rounded to pence per transaction, or per client-month invoice, to match billing |
+| 16 of the 17 pending chargebacks are older than the longest resolution time seen (15 days); the oldest is 167 days. Together they are worth £810,270. Is the status feed current? | They are genuinely pending | If they have resolved, revenue and pending exposure are both misstated |
+| The USD rate is exactly 0.77 on 75 of 182 days and never lower. Is that a floor in the rate source? | Rates are used as given | USD conversions on those days may be wrong |
+
+## Production considerations
+
+What I would change before running this on production data:
+
+- **Incremental processing.** Running contract spend and discount status are recalculated over every transaction on each run. At volume, `int_transactions_with_contract_spend` would need an incremental design: only contracts with new activity recalculated, or running totals persisted. The five chained intermediate views would become tables or incremental models; dbt_project_evaluator flags chains of views longer than 4.
+- **Late-arriving and changing data.** The recognised basis is stable as chargebacks resolve, but a late-arriving transaction, a corrected exchange rate or a changed resolution status would still restate a closed month. I would snapshot the resolutions and contracts tables (dbt snapshots) and agree with finance when a month is closed.
+- **Money types and rounding.** SQLite stores these amounts as floating point, which is why the reconciliation test needs a small tolerance. A production warehouse would use exact `NUMERIC` types, with a rounding policy agreed with finance (see the questions above).
+- **Transaction ordering.** Same-day transactions are ordered by `transaction_id`, but IDs are allocated in blocks by type, not in time order. Real timestamps would make the threshold-crossing transaction unambiguous.
+- **Data quality monitoring.** The duplicate-refund test accepts the 6 known cases; in production I would alert on new cases and fix them at source. With a real loader, source freshness checks would be configured.
+- **Reference data.** A client master list would allow `relationships` tests on `client_id` and a client dimension.
+- **Semantic layer and contracts.** On a warehouse MetricFlow supports, the metrics would be queried and tested; the marts would get enforced model contracts, which SQLite cannot enforce.
+
 ## Testing
 
 Generic tests are defined under `data_tests:` in each folder's `_<directory>__models.yml` file, singular tests are described in `tests/_singular_tests.yml`, and all run with `dbt build` or `dbt test`. Coverage includes:
@@ -199,7 +245,7 @@ Generic tests are defined under `data_tests:` in each folder's `_<directory>__mo
 - Relationships between transactions, refunds, resolutions and currencies
 - Conditional rules, e.g. only refunds have a linked transaction, and only resolved chargebacks have a resolution date
 - Hard and soft (warning) ranges on fee margins and exchange rates
-- Unit tests (`unit_tests.yml` in `intermediate/` and `marts/`) on small hand-built fixtures, for logic the real data never exercises: the discount crossing the threshold and expiring, refunds of pre-contract payments, chargebacks moving between months, and contract and discount status by month
+- Unit tests (`unit_tests.yml` in `intermediate/` and `marts/`) on small hand-built fixtures, each against the model that owns the logic, for cases the real data never exercises: the discount being earned and ending with the contract, refunds of pre-contract payments, refunds reversing at their payment's margin, the discounted margin applying only once earned, exchange-rate gaps, chargebacks moving between months, and contract and discount status by month
 - Singular tests in `tests/`: exchange rates are daily with no gaps, and the monthly mart reconciles to `fct_transactions`
 
 SQL style is enforced with SQLFluff (`.sqlfluff`):
