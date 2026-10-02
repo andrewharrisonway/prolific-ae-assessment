@@ -142,7 +142,7 @@ Whether a query (or CTE) has a join decides everything:
 
 Common project words to check against include: transaction, client, contract, currency, rate, resolution, revenue, payment, refund, chargeback, fraud, spend, threshold, discount, margin, amount, date. So `rev`, `pay` and `ref` are out, because each is a substring of one of these words. `amt` is fine: it abbreviates `amount` but is not a substring of it.
 
-The same rules apply to correlated subqueries: give the inner reference its own alias (e.g. `cr2`) that is distinct from the outer one.
+The same rules apply to subqueries: give an inner reference its own alias, distinct from the outer one (e.g. an inner `currency_rates` as `cr2` when the outer one is `crt`). Avoid correlated subqueries for "latest value as of a date" lookups altogether (see SQLite specifics).
 
 Column aliases (`AS transaction_amount_gbp`) are a separate thing: always use `AS` for them, regardless of joins.
 
@@ -169,6 +169,7 @@ Use the business's vocabulary: these are **clients**, not customers.
 The warehouse is SQLite, which shapes several choices:
 
 - **Use `CASE WHEN` for conditional logic.** It is portable across warehouses and SQLite versions.
+- **No correlated subqueries for "latest value as of a date" lookups.** Give each value a validity period with `LEAD(...) OVER (PARTITION BY ... ORDER BY ...)` and join on the range instead (see `currency_rate_periods` in `int__transactions`). Through views, a correlated subquery re-evaluates the view for every row: the rate lookup took the build from about 2 seconds to 79.
 - **Views are not validated when created.** `dbt build` will succeed even if a view references a function that doesn't exist. After changing any view (staging and intermediate are views), run a query against it:
   ```bash
   dbt show --inline "select count(*) from {{ ref('int__transactions') }}"

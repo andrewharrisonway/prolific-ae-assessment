@@ -87,6 +87,24 @@ downstream.
 ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
 */
 
+, currency_rate_periods AS (
+    -- NOTE: each rate applies from its date until the next rate for the same
+    -- currency, so a transaction takes the latest rate on or before its date.
+    -- The last rate has no end date and carries forward, which fills rate gaps
+    -- at the end of the period. In production, this should be addressed
+    -- upstream to determine the source of the gaps.
+    SELECT
+        currency
+        , rate_date
+        , exchange_rate_to_gbp
+        , LEAD(rate_date) OVER (
+            PARTITION BY currency
+            ORDER BY rate_date
+        ) AS next_rate_date
+    FROM
+        currency_rates
+)
+
 , transactions_classified AS (
     SELECT
         txn.transaction_id
@@ -158,10 +176,10 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
             ELSE tcl.counts_toward_spend * tcl.is_settled
         END AS is_spend_qualifying
         , ROUND(
-            tcl.gross_amount_local * crt.exchange_rate_to_gbp, 2
+            tcl.gross_amount_local * crp.exchange_rate_to_gbp, 2
         ) AS gross_amount_gbp
         , ROUND(
-            tcl.net_amount_local * crt.exchange_rate_to_gbp, 2
+            tcl.net_amount_local * crp.exchange_rate_to_gbp, 2
         ) AS net_amount_gbp
         , (
             tcl.transaction_date >= cct.contract_start_date
@@ -175,19 +193,13 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
     FROM
         transactions_classified AS tcl
     LEFT JOIN
-        currency_rates AS crt
+        currency_rate_periods AS crp
         ON
-            tcl.transaction_currency = crt.currency
-            -- NOTE: I am normally not fond of subqueries, but this one fills
-            -- conversion rate gaps at the end of the period. In production,
-            -- this should be addressed upstream to determine the source of
-            -- the gaps.
-            AND crt.rate_date = (
-                SELECT MAX(cr2.rate_date)
-                FROM currency_rates AS cr2
-                WHERE
-                    cr2.currency = tcl.transaction_currency
-                    AND cr2.rate_date <= tcl.transaction_date
+            tcl.transaction_currency = crp.currency
+            AND tcl.transaction_date >= crp.rate_date
+            AND (
+                crp.next_rate_date IS NULL
+                OR tcl.transaction_date < crp.next_rate_date
             )
     LEFT JOIN
         client_contracts AS cct

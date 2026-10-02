@@ -72,3 +72,32 @@ unit_tests:
         - {transaction_id: T2, applicable_fee_margin: 0.25, revenue_gbp: -125.5}
         # cumulative spend 1,002 (not 500): reaches the threshold, discount applies
         - {transaction_id: T3, applicable_fee_margin: 0.125, revenue_gbp: 125.25}
+
+  - name: exchange_rate_lookup_uses_latest_rate_on_or_before
+    description: "Each transaction is converted at the latest rate on or before its date: an exact-date rate when there is one, the earlier rate across a gap, and the last rate carried forward after the rates end."
+    model: int__transactions
+    given:
+      - input: ref('stg_global_transactions__transactions')
+        rows:
+          # between two rates: takes the earlier one (0.8)
+          - {transaction_id: T1, client_id: C005, transaction_type: payment, transaction_date: '2024-01-03', transaction_amount: 100.4, transaction_currency: USD, platform_fee_margin: 0.25, is_duplicate_refund: 0}
+          # on a rate date: takes that rate (0.75)
+          - {transaction_id: T2, client_id: C005, transaction_type: payment, transaction_date: '2024-01-05', transaction_amount: 100.4, transaction_currency: USD, platform_fee_margin: 0.25, is_duplicate_refund: 0}
+          # after the last rate: carries it forward (0.75)
+          - {transaction_id: T3, client_id: C005, transaction_type: payment, transaction_date: '2024-01-10', transaction_amount: 100.4, transaction_currency: USD, platform_fee_margin: 0.25, is_duplicate_refund: 0}
+      - input: ref('stg_global_transactions__currency_rates')
+        rows:
+          - {currency: USD, rate_date: '2024-01-01', exchange_rate_to_gbp: 0.8}
+          - {currency: USD, rate_date: '2024-01-05', exchange_rate_to_gbp: 0.75}
+      - input: ref('int__client_contracts')
+        rows: []
+      - input: ref('stg_global_transactions__transaction_resolutions')
+        rows: []
+      - input: ref('transaction_types')
+        rows:
+          - {transaction_type: payment, amount_direction: 1, recognises_revenue: 1, counts_toward_spend: 1, requires_resolution: 0}
+    expect:
+      rows:
+        - {transaction_id: T1, gross_amount_gbp: 80.32}
+        - {transaction_id: T2, gross_amount_gbp: 75.3}
+        - {transaction_id: T3, gross_amount_gbp: 75.3}
