@@ -1,7 +1,8 @@
 name: dbt CI
 
 # Builds the project from a clean checkout, following the README's setup steps,
-# then runs every test and the SQL linter.
+# then runs every test and the SQL linter. On pushes to main, it also publishes
+# the dbt docs site to GitHub Pages (manual runs on main publish it too).
 
 on:
   push:
@@ -43,3 +44,38 @@ jobs:
 
       - name: Lint SQL
         run: sqlfluff lint models tests analyses
+
+      # The catalog reads column types from the built database, so the docs are
+      # generated after the build. --static inlines the manifest and catalog
+      # into a single page.
+      - name: Generate docs site
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          dbt docs generate --static
+          mkdir -p docs_site
+          cp target/static_index.html docs_site/index.html
+
+      - name: Upload docs site
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs_site
+
+  deploy-docs:
+    # Pull requests build and test only; the published docs always match main
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

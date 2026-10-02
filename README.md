@@ -8,7 +8,7 @@ The original brief is in [task_instructions.md](task_instructions.md).
 
 ## Summary for reviewers
 
-**What's here:** monthly revenue recognition by client, in GBP, with contract spend tracking and discount status. Raw data flows through staging, then one intermediate model per business step, into two facts. Start with **`fct_client_monthly_revenue`**; the [lineage](#lineage) and the dbt docs site (see [Documentation site](#documentation-site)) show how it is built.
+**What's here:** monthly revenue recognition by client, in GBP, with contract spend tracking and discount status. Raw data flows through staging, then one intermediate model per business step, into two facts. Start with **`fct_client_monthly_revenue`**; the [lineage](#lineage) and the [dbt docs site](https://andrewharrisonway.github.io/prolific-ae-assessment/) show how it is built.
 
 **Key decisions**
 
@@ -56,7 +56,9 @@ Run `dbt seed` before `dbt build`. Models read the raw tables through `source()`
 
 ### Documentation site
 
-The generated docs site has an overview page, the lineage graph, and descriptions of every model, column and test:
+The docs site has an overview page, the lineage graph, and descriptions of every model, column and test. It is published at **https://andrewharrisonway.github.io/prolific-ae-assessment/**, rebuilt by CI on every push to `main`.
+
+To build and browse it locally instead:
 
 ```bash
 dbt docs generate
@@ -65,7 +67,7 @@ dbt docs serve
 
 ### Continuous integration
 
-[`.github/workflows/dbt_ci.yml`](.github/workflows/dbt_ci.yml) runs on every push to `main` and every pull request: it follows the setup steps above on a clean machine, then runs `dbt seed`, `dbt build` (every model and test) and `sqlfluff lint` (models, tests and analyses). It can also be run manually from the Actions tab.
+[`.github/workflows/dbt_ci.yml`](.github/workflows/dbt_ci.yml) runs on every push to `main` and every pull request: it follows the setup steps above on a clean machine, then runs `dbt seed`, `dbt build` (every model and test) and `sqlfluff lint` (models, tests and analyses). It can also be run manually from the Actions tab. Runs on `main` (pushes and manual runs) then generate the docs site and publish it to GitHub Pages.
 
 ### Why the raw data is loaded as seeds
 
