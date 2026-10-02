@@ -2,102 +2,100 @@ version: 2
 
 # No client reaches its spend threshold in the provided data, so the discount
 # logic is never exercised by the real data. These unit tests prove it with
-# small hand-built fixtures.
+# small hand-built fixtures, each against the model that owns the logic.
 #
-# Fee margins (0.25 standard, 0.125 discounted) are chosen to be exact in
-# floating point, so expected revenue compares exactly. Amounts are chosen so
-# revenue is never a whole number: dbt casts expected values with SQLite's
-# numeric affinity, which would turn an expected 150.0 into 150 and fail the
-# comparison against the model's 150.0.
+# Amounts and margins are chosen to be exact in floating point and never whole
+# numbers: dbt casts expected values with SQLite's numeric affinity, which would
+# turn an expected 150.0 into 150 and fail the comparison against 150.0.
+# Every expected row lists the same columns, since dbt combines them with
+# UNION ALL.
 
 unit_tests:
-  - name: discount_applies_from_threshold_crossing_until_contract_end
-    description: "The discounted margin applies from the transaction that takes cumulative spend to the threshold, for the rest of the contract term, and stops when the contract ends."
-    model: int__transactions
-    given:
-      - input: ref('stg_global_transactions__transactions')
-        rows:
-          - {transaction_id: T1, client_id: C001, transaction_type: payment, transaction_date: '2024-01-10', transaction_amount: 602, transaction_currency: GBP, platform_fee_margin: 0.25, is_duplicate_refund: 0}
-          - {transaction_id: T2, client_id: C001, transaction_type: payment, transaction_date: '2024-01-20', transaction_amount: 500, transaction_currency: GBP, platform_fee_margin: 0.25, is_duplicate_refund: 0}
-          - {transaction_id: T3, client_id: C001, transaction_type: payment, transaction_date: '2024-01-25', transaction_amount: 100, transaction_currency: GBP, platform_fee_margin: 0.25, is_duplicate_refund: 0}
-          - {transaction_id: T4, client_id: C001, transaction_type: payment, transaction_date: '2024-02-05', transaction_amount: 102, transaction_currency: GBP, platform_fee_margin: 0.25, is_duplicate_refund: 0}
-      - input: ref('int__client_contracts')
-        rows:
-          - {client_id: C001, contract_start_date: '2024-01-01', contract_end_date: '2024-02-01', spend_threshold: 1000, discounted_fee_margin: 0.125}
-      - input: ref('stg_global_transactions__currency_rates')
-        rows:
-          - {currency: GBP, rate_date: '2024-01-01', exchange_rate_to_gbp: 1}
-      - input: ref('stg_global_transactions__transaction_resolutions')
-        rows: []
-      - input: ref('transaction_types')
-        rows:
-          - {transaction_type: payment, amount_direction: 1, recognises_revenue: 1, counts_toward_spend: 1, requires_resolution: 0}
-    expect:
-      rows:
-        # cumulative spend 602: below threshold
-        - {transaction_id: T1, applicable_fee_margin: 0.25, revenue_gbp: 150.5}
-        # cumulative spend 1,102: crosses the threshold, discount applies
-        - {transaction_id: T2, applicable_fee_margin: 0.125, revenue_gbp: 62.5}
-        # discount continues for the rest of the term
-        - {transaction_id: T3, applicable_fee_margin: 0.125, revenue_gbp: 12.5}
-        # contract ended on 2024-02-01: standard margin again
-        - {transaction_id: T4, applicable_fee_margin: 0.25, revenue_gbp: 25.5}
-
-  - name: refund_of_pre_contract_payment_does_not_reduce_spend
-    description: "A refund inside the contract window of a payment made before the contract started does not reduce contract spend, because the payment never counted toward it."
-    model: int__transactions
-    given:
-      - input: ref('stg_global_transactions__transactions')
-        rows:
-          - {transaction_id: T1, client_id: C004, transaction_type: payment, transaction_date: '2024-02-10', transaction_amount: 502, transaction_currency: GBP, platform_fee_margin: 0.25, is_duplicate_refund: 0}
-          - {transaction_id: T2, client_id: C004, transaction_type: refund, transaction_date: '2024-03-01', transaction_amount: 502, transaction_currency: GBP, platform_fee_margin: 0.25, linked_transaction_id: T1, is_duplicate_refund: 0}
-          - {transaction_id: T3, client_id: C004, transaction_type: payment, transaction_date: '2024-03-05', transaction_amount: 1002, transaction_currency: GBP, platform_fee_margin: 0.25, is_duplicate_refund: 0}
-      - input: ref('int__client_contracts')
-        rows:
-          - {client_id: C004, contract_start_date: '2024-03-01', contract_end_date: '2024-12-01', spend_threshold: 1000, discounted_fee_margin: 0.125}
-      - input: ref('stg_global_transactions__currency_rates')
-        rows:
-          - {currency: GBP, rate_date: '2024-01-01', exchange_rate_to_gbp: 1}
-      - input: ref('stg_global_transactions__transaction_resolutions')
-        rows: []
-      - input: ref('transaction_types')
-        rows:
-          - {transaction_type: payment, amount_direction: 1, recognises_revenue: 1, counts_toward_spend: 1, requires_resolution: 0}
-          - {transaction_type: refund, amount_direction: -1, recognises_revenue: 1, counts_toward_spend: 1, requires_resolution: 0}
-    expect:
-      rows:
-        # before the contract: standard margin
-        - {transaction_id: T1, applicable_fee_margin: 0.25, revenue_gbp: 125.5}
-        # the refund still reverses revenue, but does not reduce contract spend
-        - {transaction_id: T2, applicable_fee_margin: 0.25, revenue_gbp: -125.5}
-        # cumulative spend 1,002 (not 500): reaches the threshold, discount applies
-        - {transaction_id: T3, applicable_fee_margin: 0.125, revenue_gbp: 125.25}
-
   - name: exchange_rate_lookup_uses_latest_rate_on_or_before
     description: "Each transaction is converted at the latest rate on or before its date: an exact-date rate when there is one, the earlier rate across a gap, and the last rate carried forward after the rates end."
-    model: int__transactions
+    model: int_transactions_converted_to_gbp
     given:
-      - input: ref('stg_global_transactions__transactions')
+      - input: ref('int_transactions_classified')
         rows:
           # between two rates: takes the earlier one (0.8)
-          - {transaction_id: T1, client_id: C005, transaction_type: payment, transaction_date: '2024-01-03', transaction_amount: 100.4, transaction_currency: USD, platform_fee_margin: 0.25, is_duplicate_refund: 0}
+          - {transaction_id: T1, transaction_date: '2024-01-03', transaction_currency: USD, gross_amount_local: 100.4, net_amount_local: 100.4}
           # on a rate date: takes that rate (0.75)
-          - {transaction_id: T2, client_id: C005, transaction_type: payment, transaction_date: '2024-01-05', transaction_amount: 100.4, transaction_currency: USD, platform_fee_margin: 0.25, is_duplicate_refund: 0}
+          - {transaction_id: T2, transaction_date: '2024-01-05', transaction_currency: USD, gross_amount_local: 100.4, net_amount_local: 100.4}
           # after the last rate: carries it forward (0.75)
-          - {transaction_id: T3, client_id: C005, transaction_type: payment, transaction_date: '2024-01-10', transaction_amount: 100.4, transaction_currency: USD, platform_fee_margin: 0.25, is_duplicate_refund: 0}
+          - {transaction_id: T3, transaction_date: '2024-01-10', transaction_currency: USD, gross_amount_local: 100.4, net_amount_local: 100.4}
       - input: ref('stg_global_transactions__currency_rates')
         rows:
           - {currency: USD, rate_date: '2024-01-01', exchange_rate_to_gbp: 0.8}
           - {currency: USD, rate_date: '2024-01-05', exchange_rate_to_gbp: 0.75}
-      - input: ref('int__client_contracts')
-        rows: []
-      - input: ref('stg_global_transactions__transaction_resolutions')
-        rows: []
-      - input: ref('transaction_types')
-        rows:
-          - {transaction_type: payment, amount_direction: 1, recognises_revenue: 1, counts_toward_spend: 1, requires_resolution: 0}
     expect:
       rows:
         - {transaction_id: T1, gross_amount_gbp: 80.32}
         - {transaction_id: T2, gross_amount_gbp: 75.3}
         - {transaction_id: T3, gross_amount_gbp: 75.3}
+
+  - name: discount_earned_from_threshold_crossing_until_contract_end
+    description: "The discount is earned on the transaction that takes running contract spend to the threshold, stays earned for the rest of the contract term, and is off once the contract ends."
+    model: int_transactions_with_contract_spend
+    given:
+      - input: ref('int_transactions_converted_to_gbp')
+        rows:
+          - {transaction_id: T1, client_id: C001, transaction_type: payment, transaction_date: '2024-01-10', spend_effective_date: '2024-01-10', net_amount_gbp: 602.5, is_spend_qualifying: 1}
+          - {transaction_id: T2, client_id: C001, transaction_type: payment, transaction_date: '2024-01-20', spend_effective_date: '2024-01-20', net_amount_gbp: 500.25, is_spend_qualifying: 1}
+          - {transaction_id: T3, client_id: C001, transaction_type: payment, transaction_date: '2024-01-25', spend_effective_date: '2024-01-25', net_amount_gbp: 100.5, is_spend_qualifying: 1}
+          - {transaction_id: T4, client_id: C001, transaction_type: payment, transaction_date: '2024-02-05', spend_effective_date: '2024-02-05', net_amount_gbp: 102.5, is_spend_qualifying: 1}
+      - input: ref('int_client_contracts_windowed')
+        rows:
+          - {client_id: C001, contract_start_date: '2024-01-01', contract_end_date: '2024-02-01', spend_threshold: 1000, discounted_fee_margin: 0.125}
+    expect:
+      rows:
+        # running spend 602.5: below threshold
+        - {transaction_id: T1, running_contract_spend_gbp: 602.5, is_discount_earned: 0}
+        # running spend 1,102.75: crosses the threshold, discount earned
+        - {transaction_id: T2, running_contract_spend_gbp: 1102.75, is_discount_earned: 1}
+        # stays earned for the rest of the term
+        - {transaction_id: T3, running_contract_spend_gbp: 1203.25, is_discount_earned: 1}
+        # the contract ended on 2024-02-01: adds no spend, discount off
+        - {transaction_id: T4, running_contract_spend_gbp: 1203.25, is_discount_earned: 0}
+
+  - name: refund_of_pre_contract_payment_does_not_reduce_spend
+    description: "A refund inside the contract window of a payment made before the contract started does not reduce contract spend, because the payment never counted toward it."
+    model: int_transactions_with_contract_spend
+    given:
+      - input: ref('int_transactions_converted_to_gbp')
+        rows:
+          # a payment before the contract starts
+          - {transaction_id: T1, client_id: C004, transaction_type: payment, transaction_date: '2024-02-10', spend_effective_date: '2024-02-10', net_amount_gbp: 502.5, is_spend_qualifying: 1}
+          # its refund, on the contract's first day
+          - {transaction_id: T2, client_id: C004, transaction_type: refund, transaction_date: '2024-03-01', spend_effective_date: '2024-03-01', net_amount_gbp: -502.5, linked_payment_date: '2024-02-10', is_spend_qualifying: 1}
+          - {transaction_id: T3, client_id: C004, transaction_type: payment, transaction_date: '2024-03-05', spend_effective_date: '2024-03-05', net_amount_gbp: 1002.5, is_spend_qualifying: 1}
+      - input: ref('int_client_contracts_windowed')
+        rows:
+          - {client_id: C004, contract_start_date: '2024-03-01', contract_end_date: '2024-12-01', spend_threshold: 1000, discounted_fee_margin: 0.125}
+    expect:
+      rows:
+        - {transaction_id: T1, contract_spend_gbp: 0, running_contract_spend_gbp: 0, is_discount_earned: 0}
+        # the refund does not reduce spend
+        - {transaction_id: T2, contract_spend_gbp: 0, running_contract_spend_gbp: 0, is_discount_earned: 0}
+        # running spend 1,002.5 (not 500): reaches the threshold
+        - {transaction_id: T3, contract_spend_gbp: 1002.5, running_contract_spend_gbp: 1002.5, is_discount_earned: 1}
+
+  - name: discounted_margin_applies_only_once_earned_within_contract
+    description: "The discounted margin applies only when the discount is earned and the transaction is inside the contract window; otherwise the platform margin applies. Unrecognised transactions get no revenue or recognition date."
+    model: int_transactions_with_revenue
+    given:
+      - input: ref('int_transactions_with_contract_spend')
+        rows:
+          # earned, inside the contract: discounted margin
+          - {transaction_id: R1, transaction_type: payment, spend_effective_date: '2024-03-01', net_amount_gbp: 100.5, platform_fee_margin: 0.25, discounted_fee_margin: 0.125, is_in_contract_period: 1, is_discount_earned: 1, is_revenue_recognised: 1}
+          # inside the contract, not yet earned: platform margin
+          - {transaction_id: R2, transaction_type: payment, spend_effective_date: '2024-03-02', net_amount_gbp: 100.5, platform_fee_margin: 0.25, discounted_fee_margin: 0.125, is_in_contract_period: 1, is_discount_earned: 0, is_revenue_recognised: 1}
+          # no contract: platform margin
+          - {transaction_id: R3, transaction_type: payment, spend_effective_date: '2024-03-03', net_amount_gbp: 100.5, platform_fee_margin: 0.25, is_revenue_recognised: 1}
+          # a pending chargeback: no revenue, no recognition date
+          - {transaction_id: R4, transaction_type: chargeback, spend_effective_date: '2024-03-04', net_amount_gbp: 100.5, platform_fee_margin: 0.25, is_revenue_recognised: 0}
+    expect:
+      rows:
+        - {transaction_id: R1, applicable_fee_margin: 0.125, recognition_date: '2024-03-01', revenue_gbp: 12.5625}
+        - {transaction_id: R2, applicable_fee_margin: 0.25, recognition_date: '2024-03-02', revenue_gbp: 25.125}
+        - {transaction_id: R3, applicable_fee_margin: 0.25, recognition_date: '2024-03-03', revenue_gbp: 25.125}
+        - {transaction_id: R4, applicable_fee_margin: 0.25, recognition_date: null, revenue_gbp: 0}

@@ -147,7 +147,7 @@ models:
           - not_null # NB: captures dates that are nulled via the `date()` function for being malformed or missing
 
       - name: platform_fee_margin
-        description: "Platform fee margin applied to this transaction."
+        description: "{{ doc('platform_fee_margin') }}"
         data_tests:
           - not_null
 

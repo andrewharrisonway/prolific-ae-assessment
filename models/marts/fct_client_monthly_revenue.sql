@@ -37,7 +37,7 @@ transactions AS (
         , contract_end_date
         , spend_threshold
     FROM
-        {{ ref('int__client_contracts') }}
+        {{ ref('int_client_contracts_windowed') }}
 )
 
 /* TRANSFORMATIONS */

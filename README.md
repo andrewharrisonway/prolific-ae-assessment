@@ -69,8 +69,12 @@ models/
 │   └── global_transactions/   one folder per source system: the source definition
 │                              (_global_transactions__sources.yml), one staging model
 │                              per raw table, and their tests (_global_transactions__models.yml)
-├── intermediate/   int__client_contracts: contract windows
-│                   int__transactions: GBP conversion, contract discounts, revenue per transaction
+├── intermediate/   one model per step, named int_<entity>_<verb>:
+│                   int_client_contracts_windowed: contract end dates
+│                   int_transactions_classified: type behaviour, signed amounts, eligibility
+│                   int_transactions_converted_to_gbp: exchange-rate lookup
+│                   int_transactions_with_contract_spend: contract spend and discount status
+│                   int_transactions_with_revenue: fee margin, recognition date, revenue
 └── marts/          dim_dates, fct_transactions, fct_client_monthly_revenue, semantic layer
 tests/              singular tests (daily exchange rates, monthly mart reconciliation) and their descriptions
 ```
@@ -87,12 +91,22 @@ Each raw table passes through its staging model first (omitted for clarity).
 
 ```
 transactions ─────────────┐
-transaction_resolutions ──┤
-currency_rates ───────────┼──► int__transactions ──► fct_transactions ──┐
-transaction_types (seed) ─┘          ▲                                  │
-client_contracts ──► int__client_contracts ─────────────────────────────┼──► fct_client_monthly_revenue
-                                                                        │
-dim_dates (fixed spine, no parents) ────────────────────────────────────┘
+transaction_resolutions ──┼──► int_transactions_classified
+transaction_types (seed) ─┘                │
+                                           ▼
+currency_rates ───────────────► int_transactions_converted_to_gbp
+                                           │
+                                           ▼
+client_contracts ──► int_client_contracts_windowed ──► int_transactions_with_contract_spend
+                                   │                                 │
+                                   │                                 ▼
+                                   │                   int_transactions_with_revenue
+                                   │                                 │
+                                   │                                 ▼
+                                   │                         fct_transactions
+                                   │                                 │
+                                   └─────────────────────────────────┼──► fct_client_monthly_revenue
+dim_dates (fixed spine, no parents) ─────────────────────────────────┘
 ```
 
 ## Marts
@@ -136,7 +150,7 @@ How each transaction type behaves is defined as data in the [`transaction_types`
 - Fraud contributes nothing to revenue or spend.
 - Chargebacks count only once resolved, and towards spend from their resolution date. Pending chargebacks contribute zero.
 
-`int__transactions` keeps both the recorded amount (`gross_amount_*`, always positive) and the signed amount (`net_amount_*`). Revenue is `net_amount_gbp × applicable_fee_margin` for recognised transactions, and 0 otherwise.
+The intermediate models keep both the recorded amount (`gross_amount_*`, always positive) and the signed amount (`net_amount_*`). Revenue is `net_amount_gbp × applicable_fee_margin` for recognised transactions, and 0 otherwise.
 
 With four types, a seed is more structure than strictly needed. It is used deliberately: the business rules sit in one reviewable file, the staging model validates transaction types against it, and most of a type's behaviour (direction, revenue, spend, resolution) is data rather than logic. Rules specific to refunds, such as duplicate detection and the refund sign tests, still name the type in code.
 
@@ -147,7 +161,7 @@ Every refund links to a payment from the same client, in the same currency, for 
 Six payments are refunded more than once (one of them three times): 7 refunds in total, worth £175,166 of GMV and £35,033 of revenue. Because every refund is for the full payment amount, a second refund of the same payment cannot be genuine, so:
 
 - Only the first refund of each payment (by date, then transaction ID) counts.
-- Later refunds are flagged `is_duplicate_refund` in staging (`stg_global_transactions__transactions`), which describes the source data without filtering it. `int__transactions` then excludes flagged refunds from revenue and contract spend. The rows are kept, so the exclusion is visible and can be reported.
+- Later refunds are flagged `is_duplicate_refund` in staging (`stg_global_transactions__transactions`), which describes the source data without filtering it. `int_transactions_classified` then excludes flagged refunds from revenue and contract spend. The rows are kept, so the exclusion is visible and can be reported.
 - A `unique` test on `linked_transaction_id` in staging catches payments refunded more than once. It accepts the 6 known payments (`warn_if` / `error_if: "> 6"`) and fails if any new duplicate appears. It also stores the failing rows (`store_failures`), so the known duplicates can be queried in the `main_dbt_test__audit` schema (`target/main_dbt_test__audit.db`).
 
 ### Currency conversion

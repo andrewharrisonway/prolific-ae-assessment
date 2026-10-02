@@ -23,7 +23,8 @@ raw_input AS (
 , flagged AS (
     -- NOTE: refunds are always for the full payment amount, so any refund
     -- after the first for the same payment is a duplicate. Flagged, not
-    -- filtered: what to do about duplicates is decided in int__transactions.
+    -- filtered: what to do about duplicates is decided in
+    -- int_transactions_classified.
     SELECT
         transaction_id
         , client_id

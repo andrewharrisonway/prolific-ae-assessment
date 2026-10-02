@@ -27,7 +27,7 @@ transactions AS (
         , applicable_fee_margin
         , revenue_gbp
     FROM
-        {{ ref('int__transactions') }}
+        {{ ref('int_transactions_with_revenue') }}
 )
 
 /* TRANSFORMATIONS */

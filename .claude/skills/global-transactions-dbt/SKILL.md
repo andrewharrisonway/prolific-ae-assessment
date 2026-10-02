@@ -151,7 +151,7 @@ Column aliases (`AS transaction_amount_gbp`) are a separate thing: always use `A
 | Thing | Convention | Example |
 |---|---|---|
 | Staging model | `stg_<source>__<table>`, where `<source>` is the source system's name | `stg_global_transactions__transaction_resolutions` |
-| Intermediate model | `int__<entity>` | `int__transactions` |
+| Intermediate model | `int_<entity>_<verb>`: one step of business logic per model, named for what it does | `int_transactions_converted_to_gbp` |
 | Mart fact | `fct_<grain>`: events or measures at a stated grain | `fct_client_monthly_revenue`, `fct_transactions` |
 | Mart dimension | `dim_<entity>`: one row per entity, descriptive attributes | `dim_dates` |
 | Staging folder | one per source system, holding its staging models, `_<source>__sources.yml` and `_<source>__models.yml` | `models/staging/global_transactions/` |
@@ -160,7 +160,9 @@ Column aliases (`AS transaction_amount_gbp`) are a separate thing: always use `A
 | Dates | `_date` suffix | `transaction_date`, `resolution_date` |
 | Keys | `_id` suffix | `client_id`, `linked_transaction_id` |
 
-Use `fct_`/`dim_` only in marts. Staging and intermediate keep `stg_`/`int__`: they hold source cleaning and reusable logic, not reporting outputs.
+**Keep intermediate models narrow.** Each does one step and is named for it (`classified`, `converted_to_gbp`, `with_contract_spend`, `with_revenue`), so each step's logic can be tested on its own. Put a unit test on the model that owns the logic, with its direct parents as inputs. Check new joins with `dbt_utils.equal_rowcount` against the model they extend.
+
+Use `fct_`/`dim_` only in marts. Staging and intermediate keep `stg_`/`int_`: they hold source cleaning and reusable logic, not reporting outputs.
 
 Use the business's vocabulary: these are **clients**, not customers.
 
@@ -169,10 +171,10 @@ Use the business's vocabulary: these are **clients**, not customers.
 The warehouse is SQLite, which shapes several choices:
 
 - **Use `CASE WHEN` for conditional logic.** It is portable across warehouses and SQLite versions.
-- **No correlated subqueries for "latest value as of a date" lookups.** Give each value a validity period with `LEAD(...) OVER (PARTITION BY ... ORDER BY ...)` and join on the range instead (see `currency_rate_periods` in `int__transactions`). Through views, a correlated subquery re-evaluates the view for every row: the rate lookup took the build from about 2 seconds to 79.
+- **No correlated subqueries for "latest value as of a date" lookups.** Give each value a validity period with `LEAD(...) OVER (PARTITION BY ... ORDER BY ...)` and join on the range instead (see `currency_rate_periods` in `int_transactions_converted_to_gbp`). Through views, a correlated subquery re-evaluates the view for every row: the rate lookup took the build from about 2 seconds to 79.
 - **Views are not validated when created.** `dbt build` will succeed even if a view references a function that doesn't exist. After changing any view (staging and intermediate are views), run a query against it:
   ```bash
-  dbt show --inline "select count(*) from {{ ref('int__transactions') }}"
+  dbt show --inline "select count(*) from {{ ref('int_transactions_with_revenue') }}"
   ```
 - **No date_trunc or regex.** Use `DATE(d, 'start of month')` for month buckets, `DATE(d, '+N months')` for offsets, and `GLOB` patterns for format tests.
 - **Types are affinities.** `CAST(x AS numeric(8, 2))` doesn't enforce precision; keep the precision anyway as documentation, but make it valid (precision ≥ scale) so it ports to another warehouse.
@@ -219,7 +221,7 @@ Every model has an entry in its folder's `_<directory>__models.yml` (e.g. `_mart
         severity: warn
   ```
 - **Test a column once, where it is created or changed.** A column passed through unchanged from a lower layer, where it is already tested, is not tested again downstream; renaming it doesn't count as a change. Retest it only if the model processes it: casting, calculating, aggregating, or deriving it through a join, such as a lookup or a conversion. Repeating upstream tests adds run time and noise without catching anything new, and it hides which tests guard which logic. Still give passed-through columns a description.
-  - *Example:* `transaction_type` is tested in staging and passed through `int__transactions` unchanged, so it isn't retested there. `net_amount_gbp` is calculated in `int__transactions`, so it is tested there.
+  - *Example:* `transaction_type` is tested in staging and passed through the intermediate models unchanged, so it isn't retested there. `net_amount_gbp` is calculated in `int_transactions_converted_to_gbp`, so it is tested there.
   - *Exception, primary keys:* always test a model's primary key for `unique` and `not_null`, even when it is passed through unchanged. The primary key defines the model's grain, and every model must prove its own grain: joins can fan out rows, and filters or unions can introduce gaps, so neither property is inherited from the layer below.
 - **Intermediate and mart models need tests on what they create:** `unique` and `not_null` on the primary key, not-null on calculated measures (e.g. `net_amount_gbp`), and row-count or reconciliation checks against the upstream model. Logic with thresholds or windows (cumulative spend, discount trigger) should get dbt unit tests with small hand-built fixtures.
 

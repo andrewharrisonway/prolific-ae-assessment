@@ -22,7 +22,7 @@ unit_tests:
         rows:
           - {date_day: '2024-01-15', month_start_date: '2024-01-01', month_end_date: '2024-01-31'}
           - {date_day: '2024-02-15', month_start_date: '2024-02-01', month_end_date: '2024-02-29'}
-      - input: ref('int__client_contracts')
+      - input: ref('int_client_contracts_windowed')
         rows: []
     expect:
       rows:
@@ -47,7 +47,7 @@ unit_tests:
           - {date_day: '2024-01-15', month_start_date: '2024-01-01', month_end_date: '2024-01-31'}
           - {date_day: '2024-02-15', month_start_date: '2024-02-01', month_end_date: '2024-02-29'}
           - {date_day: '2024-03-15', month_start_date: '2024-03-01', month_end_date: '2024-03-31'}
-      - input: ref('int__client_contracts')
+      - input: ref('int_client_contracts_windowed')
         rows:
           - {client_id: C001, contract_start_date: '2024-02-01', contract_end_date: '2024-03-01', spend_threshold: 500}
     expect:

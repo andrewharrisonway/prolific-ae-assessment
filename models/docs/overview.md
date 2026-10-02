@@ -15,7 +15,7 @@ Monthly revenue recognition for a global marketplace: raw transactions are clean
 
 1. **Sources:** four raw tables (transactions, chargeback resolutions, daily exchange rates, client contracts), loaded by `dbt seed` as a stand-in for an extract-and-load tool.
 2. **Staging** (`stg_global_transactions__*`): one model per raw table; typing, renaming, date fixes and most data quality tests.
-3. **Intermediate** (`int__*`): the business logic: contract windows, GBP conversion, contract spend, discounts and revenue per transaction.
+3. **Intermediate** (`int_<entity>_<verb>`): the business logic, one step per model: contract windows, classifying transactions, GBP conversion, contract spend and discounts, then revenue.
 4. **Marts** (`fct_*`, `dim_*`): the tables to query.
 
 How each transaction type behaves (sign, revenue, spend, resolution) is defined in the `transaction_types` seed.

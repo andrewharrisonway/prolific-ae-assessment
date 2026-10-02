@@ -30,7 +30,7 @@ Sign applied to the recorded amount: 1 for money in, -1 for money returned (refu
 {% enddocs %}
 
 {% docs is_duplicate_refund %}
-1 for a refund of a payment that has already been refunded, otherwise 0. Every refund is for the full payment amount, so only the first refund of a payment (by date, then `transaction_id`) is genuine. Flagged rather than filtered; `int__transactions` excludes flagged refunds from revenue and spend.
+1 for a refund of a payment that has already been refunded, otherwise 0. Every refund is for the full payment amount, so only the first refund of a payment (by date, then `transaction_id`) is genuine. Flagged rather than filtered; `int_transactions_classified` excludes flagged refunds from revenue and spend.
 {% enddocs %}
 
 {% docs resolution_status %}
@@ -115,4 +115,12 @@ First day of the month.
 
 {% docs month_end_date %}
 Last day of the month.
+{% enddocs %}
+
+{% docs platform_fee_margin %}
+Standard platform fee margin recorded on the transaction. It applies unless the client has earned a contract discount (see `applicable_fee_margin`).
+{% enddocs %}
+
+{% docs linked_payment_date %}
+For refunds, the transaction date of the payment being refunded. Null for other transaction types.
 {% enddocs %}

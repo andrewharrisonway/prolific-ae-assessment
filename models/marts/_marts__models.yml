@@ -24,11 +24,11 @@ models:
           - not_null
 
   - name: fct_transactions
-    description: "One row per transaction: amounts in GBP, revenue, recognition date and contract spend. The transaction-grain fact for reporting, and the model the semantic layer is defined on. Built from `int__transactions`, where every column is tested."
+    description: "One row per transaction: amounts in GBP, revenue, recognition date and contract spend. The transaction-grain fact for reporting, and the model the semantic layer is defined on. Built from `int_transactions_with_revenue`; every column is tested in the intermediate or staging model where it is created."
     data_tests:
       - dbt_utils.equal_rowcount:
           arguments:
-            compare_model: ref('int__transactions')
+            compare_model: ref('int_transactions_with_revenue')
     columns:
       - name: transaction_id
         description: "{{ doc('transaction_id') }} Primary key of this model."
