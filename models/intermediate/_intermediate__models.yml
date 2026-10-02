@@ -2,7 +2,9 @@ version: 2
 
 models:
   - name: int_client_contracts_windowed
-    description: "One row per client contract, with its end date. Defines the contract window once for every model that needs it."
+    description: >-
+      One row per client contract, with its end date. Defines the contract
+      window once for every model that needs it.
     columns:
       - name: client_id
         description: "{{ doc('client_id') }} Primary key of this model."
@@ -11,19 +13,29 @@ models:
           - not_null
 
       - name: contract_start_date
-        description: "{{ doc('contract_start_date') }} Passed through from staging, where it is tested."
+        description: >-
+          {{ doc('contract_start_date') }} Passed through from staging, where it
+          is tested.
 
       - name: contract_duration_months
-        description: "{{ doc('contract_duration_months') }} Passed through from staging, where it is tested."
+        description: >-
+          {{ doc('contract_duration_months') }} Passed through from staging,
+          where it is tested.
 
       - name: spend_threshold
-        description: "{{ doc('spend_threshold') }} Passed through from staging, where it is tested."
+        description: >-
+          {{ doc('spend_threshold') }} Passed through from staging, where it is
+          tested.
 
       - name: discounted_fee_margin
-        description: "{{ doc('discounted_fee_margin') }} Passed through from staging, where it is tested."
+        description: >-
+          {{ doc('discounted_fee_margin') }} Passed through from staging, where
+          it is tested.
 
       - name: contract_end_date
-        description: "Date the contract ends (exclusive): `contract_start_date` plus `contract_duration_months` months."
+        description: >-
+          Date the contract ends (exclusive): `contract_start_date` plus
+          `contract_duration_months` months.
         data_tests:
           - not_null
           - dbt_utils.expression_is_true:
@@ -32,7 +44,10 @@ models:
 
 
   - name: int_transactions_classified
-    description: "One row per transaction, with its type's behaviour from the `transaction_types` seed applied: the signed amount, resolution status, and whether it counts toward revenue and contract spend."
+    description: >-
+      One row per transaction, with its type's behaviour from the
+      `transaction_types` seed applied: the signed amount, resolution status,
+      and whether it counts toward revenue and contract spend.
     data_tests:
       - dbt_utils.equal_rowcount: # one row per transaction: catches joins that fan out or drop rows
           arguments:
@@ -45,25 +60,40 @@ models:
           - not_null
 
       - name: transaction_date
-        description: "{{ doc('transaction_date') }} Passed through from staging, where it is tested."
+        description: >-
+          {{ doc('transaction_date') }} Passed through from staging, where it is
+          tested.
 
       - name: client_id
-        description: "{{ doc('client_id') }} Passed through from staging, where it is tested."
+        description: >-
+          {{ doc('client_id') }} Passed through from staging, where it is
+          tested.
 
       - name: transaction_type
-        description: "{{ doc('transaction_type') }} Passed through from staging, where it is tested."
+        description: >-
+          {{ doc('transaction_type') }} Passed through from staging, where it is
+          tested.
 
       - name: transaction_currency
-        description: "{{ doc('transaction_currency') }} Passed through from staging, where it is tested."
+        description: >-
+          {{ doc('transaction_currency') }} Passed through from staging, where
+          it is tested.
 
       - name: platform_fee_margin
-        description: "{{ doc('platform_fee_margin') }} Passed through from staging, where it is tested."
+        description: >-
+          {{ doc('platform_fee_margin') }} Passed through from staging, where it
+          is tested.
 
       - name: amount_direction
-        description: "{{ doc('amount_direction') }} From the `transaction_types` seed, where it is tested; the relationships test in staging guarantees every transaction type has a match."
+        description: >-
+          {{ doc('amount_direction') }} From the `transaction_types` seed, where
+          it is tested; the relationships test in staging guarantees every
+          transaction type has a match.
 
       - name: gross_amount_local
-        description: "{{ doc('gross_amount_local') }} Staging's `transaction_amount`, renamed; tested in staging."
+        description: >-
+          {{ doc('gross_amount_local') }} Staging's `transaction_amount`,
+          renamed; tested in staging.
 
       - name: net_amount_local
         description: "{{ doc('net_amount_local') }}"
@@ -71,13 +101,19 @@ models:
           - not_null
 
       - name: resolution_status
-        description: "{{ doc('resolution_status') }} Null for transactions that need no resolution. Passed through from staging, where it is tested."
+        description: >-
+          {{ doc('resolution_status') }} Null for transactions that need no
+          resolution. Passed through from staging, where it is tested.
 
       - name: resolution_date
-        description: "{{ doc('resolution_date') }} Also null for transactions that need no resolution. Passed through from staging, where it is tested."
+        description: >-
+          {{ doc('resolution_date') }} Also null for transactions that need no
+          resolution. Passed through from staging, where it is tested.
 
       - name: linked_transaction_id
-        description: "{{ doc('linked_transaction_id') }} Passed through from staging, where it is tested."
+        description: >-
+          {{ doc('linked_transaction_id') }} Passed through from staging, where
+          it is tested.
 
       - name: linked_payment_date
         description: "{{ doc('linked_payment_date') }}"
@@ -87,7 +123,9 @@ models:
                 where: "transaction_type = 'refund'"
 
       - name: is_duplicate_refund
-        description: "{{ doc('is_duplicate_refund') }} Passed through from staging, where it is set and tested."
+        description: >-
+          {{ doc('is_duplicate_refund') }} Passed through from staging, where it
+          is set and tested.
 
       - name: spend_effective_date
         description: "{{ doc('spend_effective_date') }}"
@@ -114,7 +152,9 @@ models:
 
 
   - name: int_transactions_converted_to_gbp
-    description: "One row per transaction, with its amounts converted to GBP at the latest exchange rate on or before the transaction date."
+    description: >-
+      One row per transaction, with its amounts converted to GBP at the latest
+      exchange rate on or before the transaction date.
     data_tests:
       - dbt_utils.equal_rowcount: # one row per transaction: catches joins that fan out or drop rows
           arguments:
@@ -127,52 +167,84 @@ models:
           - not_null
 
       - name: transaction_date
-        description: "{{ doc('transaction_date') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('transaction_date') }} Passed through from
+          `int_transactions_classified`.
 
       - name: client_id
-        description: "{{ doc('client_id') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('client_id') }} Passed through from
+          `int_transactions_classified`.
 
       - name: transaction_type
-        description: "{{ doc('transaction_type') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('transaction_type') }} Passed through from
+          `int_transactions_classified`.
 
       - name: transaction_currency
-        description: "{{ doc('transaction_currency') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('transaction_currency') }} Passed through from
+          `int_transactions_classified`.
 
       - name: platform_fee_margin
-        description: "{{ doc('platform_fee_margin') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('platform_fee_margin') }} Passed through from
+          `int_transactions_classified`.
 
       - name: amount_direction
-        description: "{{ doc('amount_direction') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('amount_direction') }} Passed through from
+          `int_transactions_classified`.
 
       - name: gross_amount_local
-        description: "{{ doc('gross_amount_local') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('gross_amount_local') }} Passed through from
+          `int_transactions_classified`.
 
       - name: net_amount_local
-        description: "{{ doc('net_amount_local') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('net_amount_local') }} Passed through from
+          `int_transactions_classified`.
 
       - name: resolution_status
-        description: "{{ doc('resolution_status') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('resolution_status') }} Passed through from
+          `int_transactions_classified`.
 
       - name: resolution_date
-        description: "{{ doc('resolution_date') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('resolution_date') }} Passed through from
+          `int_transactions_classified`.
 
       - name: linked_transaction_id
-        description: "{{ doc('linked_transaction_id') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('linked_transaction_id') }} Passed through from
+          `int_transactions_classified`.
 
       - name: linked_payment_date
-        description: "{{ doc('linked_payment_date') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('linked_payment_date') }} Passed through from
+          `int_transactions_classified`.
 
       - name: is_duplicate_refund
-        description: "{{ doc('is_duplicate_refund') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('is_duplicate_refund') }} Passed through from
+          `int_transactions_classified`.
 
       - name: spend_effective_date
-        description: "{{ doc('spend_effective_date') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('spend_effective_date') }} Passed through from
+          `int_transactions_classified`.
 
       - name: is_revenue_recognised
-        description: "{{ doc('is_revenue_recognised') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('is_revenue_recognised') }} Passed through from
+          `int_transactions_classified`.
 
       - name: is_spend_qualifying
-        description: "{{ doc('is_spend_qualifying') }} Passed through from `int_transactions_classified`."
+        description: >-
+          {{ doc('is_spend_qualifying') }} Passed through from
+          `int_transactions_classified`.
 
       - name: gross_amount_gbp
         description: "{{ doc('gross_amount_gbp') }}"
@@ -196,7 +268,10 @@ models:
 
 
   - name: int_transactions_with_contract_spend
-    description: "One row per transaction, with its client's contract window applied: its contribution to contract spend, the client's running contract spend, and whether the discount has been earned."
+    description: >-
+      One row per transaction, with its client's contract window applied: its
+      contribution to contract spend, the client's running contract spend, and
+      whether the discount has been earned.
     data_tests:
       - dbt_utils.equal_rowcount: # one row per transaction: catches joins that fan out or drop rows
           arguments:
@@ -209,58 +284,94 @@ models:
           - not_null
 
       - name: transaction_date
-        description: "{{ doc('transaction_date') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('transaction_date') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: client_id
-        description: "{{ doc('client_id') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('client_id') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: transaction_type
-        description: "{{ doc('transaction_type') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('transaction_type') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: transaction_currency
-        description: "{{ doc('transaction_currency') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('transaction_currency') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: platform_fee_margin
-        description: "{{ doc('platform_fee_margin') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('platform_fee_margin') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: amount_direction
-        description: "{{ doc('amount_direction') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('amount_direction') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: gross_amount_local
-        description: "{{ doc('gross_amount_local') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('gross_amount_local') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: net_amount_local
-        description: "{{ doc('net_amount_local') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('net_amount_local') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: gross_amount_gbp
-        description: "{{ doc('gross_amount_gbp') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('gross_amount_gbp') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: net_amount_gbp
-        description: "{{ doc('net_amount_gbp') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('net_amount_gbp') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: resolution_status
-        description: "{{ doc('resolution_status') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('resolution_status') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: resolution_date
-        description: "{{ doc('resolution_date') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('resolution_date') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: linked_transaction_id
-        description: "{{ doc('linked_transaction_id') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('linked_transaction_id') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: is_duplicate_refund
-        description: "{{ doc('is_duplicate_refund') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('is_duplicate_refund') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: spend_effective_date
-        description: "{{ doc('spend_effective_date') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('spend_effective_date') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: is_revenue_recognised
-        description: "{{ doc('is_revenue_recognised') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('is_revenue_recognised') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: is_spend_qualifying
-        description: "{{ doc('is_spend_qualifying') }} Passed through from `int_transactions_converted_to_gbp`."
+        description: >-
+          {{ doc('is_spend_qualifying') }} Passed through from
+          `int_transactions_converted_to_gbp`.
 
       - name: discounted_fee_margin
-        description: "{{ doc('discounted_fee_margin') }} From `int_client_contracts_windowed`; null for clients without a contract."
+        description: >-
+          {{ doc('discounted_fee_margin') }} From
+          `int_client_contracts_windowed`; null for clients without a contract.
         data_tests:
           - not_null:
               config:
@@ -282,7 +393,10 @@ models:
                 where: "is_in_contract_period IS NOT NULL"
 
       - name: running_contract_spend_gbp
-        description: "The client's contract spend to date, including this transaction, in GBP, in the order transactions take effect (`spend_effective_date`, then `transaction_id`). Null for clients without a contract."
+        description: >-
+          The client's contract spend to date, including this transaction, in
+          GBP, in the order transactions take effect (`spend_effective_date`,
+          then `transaction_id`). Null for clients without a contract.
         data_tests:
           - not_null:
               config:
@@ -298,7 +412,10 @@ models:
 
 
   - name: int_transactions_with_revenue
-    description: "One row per transaction, with the applicable fee margin, the date revenue is recognised, and revenue in GBP. The last intermediate step, read by `fct_transactions`."
+    description: >-
+      One row per transaction, with the applicable fee margin, the date revenue
+      is recognised, and revenue in GBP. The last intermediate step, read by
+      `fct_transactions`.
     data_tests:
       - dbt_utils.equal_rowcount: # refunds look up their payment's margin: catches a join that fans out or drops rows
           arguments:
@@ -311,40 +428,64 @@ models:
           - not_null
 
       - name: transaction_date
-        description: "{{ doc('transaction_date') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('transaction_date') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: client_id
-        description: "{{ doc('client_id') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('client_id') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: transaction_type
-        description: "{{ doc('transaction_type') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('transaction_type') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: transaction_currency
-        description: "{{ doc('transaction_currency') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('transaction_currency') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: amount_direction
-        description: "{{ doc('amount_direction') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('amount_direction') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: gross_amount_local
-        description: "{{ doc('gross_amount_local') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('gross_amount_local') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: net_amount_local
-        description: "{{ doc('net_amount_local') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('net_amount_local') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: gross_amount_gbp
-        description: "{{ doc('gross_amount_gbp') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('gross_amount_gbp') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: net_amount_gbp
-        description: "{{ doc('net_amount_gbp') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('net_amount_gbp') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: is_duplicate_refund
-        description: "{{ doc('is_duplicate_refund') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('is_duplicate_refund') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: is_revenue_recognised
-        description: "{{ doc('is_revenue_recognised') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('is_revenue_recognised') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: is_spend_qualifying
-        description: "{{ doc('is_spend_qualifying') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('is_spend_qualifying') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: applicable_fee_margin
         description: "{{ doc('applicable_fee_margin') }}"
@@ -357,10 +498,16 @@ models:
                 inclusive: true
 
       - name: resolution_status
-        description: "{{ doc('resolution_status') }} Null for transactions that need no resolution. Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('resolution_status') }} Null for transactions that need no
+          resolution. Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: resolution_date
-        description: "{{ doc('resolution_date') }} Null for transactions that need no resolution. Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('resolution_date') }} Null for transactions that need no
+          resolution. Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: recognition_date
         description: "{{ doc('recognition_date') }}"
@@ -375,16 +522,24 @@ models:
                 where: "is_revenue_recognised = 0"
 
       - name: spend_effective_date
-        description: "{{ doc('spend_effective_date') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('spend_effective_date') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: is_in_contract_period
-        description: "{{ doc('is_in_contract_period') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('is_in_contract_period') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: contract_spend_gbp
-        description: "{{ doc('contract_spend_gbp') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('contract_spend_gbp') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: is_discount_earned
-        description: "{{ doc('is_discount_earned') }} Passed through from `int_transactions_with_contract_spend`."
+        description: >-
+          {{ doc('is_discount_earned') }} Passed through from
+          `int_transactions_with_contract_spend`.
 
       - name: revenue_gbp
         description: "{{ doc('revenue_gbp') }}"

@@ -206,6 +206,8 @@ Every model has an entry in its folder's `_<directory>__models.yml` (e.g. `_mart
 
 **Write a shared description once, as a doc block.** When a column is described in more than one place, its description lives in `models/docs/columns.md` (modelled layers) or `models/docs/raw_columns.md` (raw data as delivered), and each yml references it with `doc()`. Add model-specific context after the block, e.g. `"{{ doc('transaction_id') }} Primary key of this model."` or `"{{ doc('client_id') }} Passed through from staging, where it is tested."`. A description used in one place only stays inline. Copies of the same description drift apart over time; a doc block can't.
 
+**Wrap long descriptions.** A `description:` that would run past 80 characters on one line is written as a folded block scalar (`description: >-`), with the text wrapped at 80 characters and indented two spaces under the key. It loads as the same single-line string. Short descriptions stay as quoted one-liners.
+
 - **Primary key:** `unique` + `not_null`, on every model, in every layer, always. This is the one exception to the pass-through rule below.
 - **Foreign keys:** `relationships` tests. Where the source supplies no reference data to test against (e.g. no client master data), don't deduce a stand-in from the data being tested, since it would always agree with it; use the strongest check available and add an `NB:` comment naming it as a data quality gap.
 - **Conditional rules** use `config: where:`, e.g. `linked_transaction_id` is `not_null` only where `transaction_type = 'refund'`.

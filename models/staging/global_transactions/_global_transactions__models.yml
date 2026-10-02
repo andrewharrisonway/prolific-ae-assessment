@@ -2,7 +2,9 @@ version: 2
 
 models:
   - name: stg_global_transactions__client_contracts
-    description: "Staged client discount agreements, from the raw `client_contracts` source table."
+    description: >-
+      Staged client discount agreements, from the raw `client_contracts` source
+      table.
     columns:
       - name: client_id
         description: "{{ doc('client_id') }} One contract per client."
@@ -59,11 +61,19 @@ models:
                 severity: warn
 
   - name: stg_global_transactions__currency_rates
-    description: "Staged daily currency exchange rates, from the raw `currency_rates` source table. `exchange_rate_to_gbp` expresses how many GBP one unit of `currency` is worth on `rate_date`."
+    description: >-
+      Staged daily currency exchange rates, from the raw `currency_rates` source
+      table. `exchange_rate_to_gbp` expresses how many GBP one unit of
+      `currency` is worth on `rate_date`.
     # NB: daily rate completeness is tested in tests/assert_currency_rates_are_daily.sql
     columns:
       - name: currency_rate_id
-        description: "Primary key: surrogate key for one currency on one date, generated with `dbt_utils.generate_surrogate_key` from `currency` and `rate_date`. On SQLite it is the readable input string (e.g. `GBP-2024-01-01`) rather than an md5 hash; see `macros/sqlite__hash.sql`."
+        description: >-
+          Primary key: surrogate key for one currency on one date, generated
+          with `dbt_utils.generate_surrogate_key` from `currency` and
+          `rate_date`. On SQLite it is the readable input string (e.g.
+          `GBP-2024-01-01`) rather than an md5 hash; see
+          `macros/sqlite__hash.sql`.
         data_tests:
           - unique
           - not_null
@@ -82,7 +92,9 @@ models:
           - not_null
 
       - name: exchange_rate_to_gbp
-        description: "Multiplier to convert one unit of currency into GBP (e.g. amount_in_currency * exchange_rate_to_gbp = amount_in_gbp)."
+        description: >-
+          Multiplier to convert one unit of currency into GBP (e.g.
+          amount_in_currency * exchange_rate_to_gbp = amount_in_gbp).
         data_tests:
           - not_null
           - dbt_utils.accepted_range:
@@ -98,7 +110,9 @@ models:
                 where: "currency = 'GBP'"
 
   - name: stg_global_transactions__transactions
-    description: "Staged transactions, lightly cleaned/standardised from the raw `transactions` source table."
+    description: >-
+      Staged transactions, lightly cleaned/standardised from the raw
+      `transactions` source table.
     columns:
       - name: transaction_id
         description: "{{ doc('transaction_id') }}"
@@ -116,7 +130,9 @@ models:
                 where: "transaction_type = 'chargeback'"
 
       - name: client_id
-        description: "{{ doc('client_id') }} Contracts are in `stg_global_transactions__client_contracts`."
+        description: >-
+          {{ doc('client_id') }} Contracts are in
+          `stg_global_transactions__client_contracts`.
         data_tests:
           - not_null
           # NB: data quality gap. The source supplies no client master data, so client IDs can only be checked for format, not for existence. With a client list, this would be a relationships test to it.
@@ -125,7 +141,9 @@ models:
                 expression: "GLOB 'C[0-9][0-9][0-9]'"
 
       - name: transaction_amount
-        description: "Transaction amount in its original currency (see `transaction_currency`)."
+        description: >-
+          Transaction amount in its original currency (see
+          `transaction_currency`).
         data_tests:
           - not_null
           - dbt_utils.expression_is_true: # ASSUMPTION: all transaction amounts are positive
@@ -218,10 +236,14 @@ models:
                 where: "transaction_type != 'refund'"
 
   - name: stg_global_transactions__transaction_resolutions
-    description: "Staged chargeback resolution statuses, from the raw `transaction_resolutions` source table."
+    description: >-
+      Staged chargeback resolution statuses, from the raw
+      `transaction_resolutions` source table.
     columns:
       - name: transaction_id
-        description: "References the transaction_id of the chargeback this resolution applies to."
+        description: >-
+          References the transaction_id of the chargeback this resolution
+          applies to.
         data_tests:
           - unique
           - not_null
@@ -240,7 +262,9 @@ models:
                 values: ['resolved', 'pending']
 
       - name: resolution_date
-        description: "{{ doc('resolution_date') }} Converted from `dd/mm/yyyy` to an ISO date."
+        description: >-
+          {{ doc('resolution_date') }} Converted from `dd/mm/yyyy` to an ISO
+          date.
         data_tests:
           - not_null:
               config:

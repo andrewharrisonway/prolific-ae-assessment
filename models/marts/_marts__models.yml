@@ -2,7 +2,13 @@ version: 2
 
 models:
   - name: dim_dates
-    description: "One row per day, from 2020-01-01 to 2030-12-31 (set by the `date_spine_start_date` and `date_spine_end_date` project vars). A fixed spine, independent of the data: the month spine for `fct_client_monthly_revenue`, which limits it to the months the data covers, and the MetricFlow time spine. The relationships tests on `fct_transactions` dates check it covers the data."
+    description: >-
+      One row per day, from 2020-01-01 to 2030-12-31 (set by the
+      `date_spine_start_date` and `date_spine_end_date` project vars). A fixed
+      spine, independent of the data: the month spine for
+      `fct_client_monthly_revenue`, which limits it to the months the data
+      covers, and the MetricFlow time spine. The relationships tests on
+      `fct_transactions` dates check it covers the data.
     time_spine:
       standard_granularity_column: date_day
     columns:
@@ -24,7 +30,12 @@ models:
           - not_null
 
   - name: fct_transactions
-    description: "One row per transaction: amounts in GBP, revenue, recognition date and contract spend. The transaction-grain fact for reporting, and the model the semantic layer is defined on. Built from `int_transactions_with_revenue`; every column is tested in the intermediate or staging model where it is created."
+    description: >-
+      One row per transaction: amounts in GBP, revenue, recognition date and
+      contract spend. The transaction-grain fact for reporting, and the model
+      the semantic layer is defined on. Built from
+      `int_transactions_with_revenue`; every column is tested in the
+      intermediate or staging model where it is created.
     data_tests:
       - dbt_utils.equal_rowcount:
           arguments:
@@ -54,10 +65,14 @@ models:
                 field: date_day
 
       - name: resolution_status
-        description: "{{ doc('resolution_status') }} Null for transactions that need no resolution."
+        description: >-
+          {{ doc('resolution_status') }} Null for transactions that need no
+          resolution.
 
       - name: resolution_date
-        description: "{{ doc('resolution_date') }} Also null for transactions that need no resolution."
+        description: >-
+          {{ doc('resolution_date') }} Also null for transactions that need no
+          resolution.
 
       - name: recognition_date
         description: "{{ doc('recognition_date') }}"
@@ -110,10 +125,19 @@ models:
         description: "{{ doc('revenue_gbp') }}"
 
   - name: fct_client_monthly_revenue
-    description: "One row per client per month: recognised revenue and GMV in GBP, the same figures by transaction month, chargebacks pending at month end, and contract spend threshold and discount tracking. Every client appears in every month the data covers (from the first transaction to the last activity). GBP amounts are unrounded. Columns tagged `meta.additivity: semi_additive` are positions as at month end: they can be summed across clients but not across months. Columns tagged `non_additive` should never be summed."
+    description: >-
+      One row per client per month: recognised revenue and GMV in GBP, the same
+      figures by transaction month, chargebacks pending at month end, and
+      contract spend threshold and discount tracking. Every client appears in
+      every month the data covers (from the first transaction to the last
+      activity). GBP amounts are unrounded. Columns tagged `meta.additivity:
+      semi_additive` are positions as at month end: they can be summed across
+      clients but not across months. Columns tagged `non_additive` should never
+      be summed.
     columns:
       - name: client_month_id
-        description: "Primary key: surrogate key from `client_id` and `month_start_date`."
+        description: >-
+          Primary key: surrogate key from `client_id` and `month_start_date`.
         data_tests:
           - unique
           - not_null
@@ -122,7 +146,8 @@ models:
         description: "{{ doc('client_id') }}"
 
       - name: month_start_date
-        description: "{{ doc('month_start_date') }} The month this row reports on."
+        description: >-
+          {{ doc('month_start_date') }} The month this row reports on.
         data_tests:
           - relationships:
               arguments:
@@ -130,10 +155,14 @@ models:
                 field: month_start_date
 
       - name: month_end_date
-        description: "{{ doc('month_end_date') }} Point-in-time measures (pending chargebacks, contract and discount status) are as at this date."
+        description: >-
+          {{ doc('month_end_date') }} Point-in-time measures (pending
+          chargebacks, contract and discount status) are as at this date.
 
       - name: is_partial_month
-        description: "1 if the data ends before this month does. July 2024 is partial: the data ends on 6 July and the month contains refunds only."
+        description: >-
+          1 if the data ends before this month does. July 2024 is partial: the
+          data ends on 6 July and the month contains refunds only.
         data_tests:
           - not_null
           - accepted_values:
@@ -142,17 +171,25 @@ models:
                 quote: false
 
       - name: recognised_gross_gmv_gbp
-        description: "Money in (payments and resolved chargebacks) recognised this month, in GBP, before refunds."
+        description: >-
+          Money in (payments and resolved chargebacks) recognised this month, in
+          GBP, before refunds.
         data_tests:
           - not_null
 
       - name: recognised_net_gmv_gbp
-        description: "Total GMV recognised this month, in GBP: money in less refunds. Fraud, pending chargebacks and duplicate refunds are excluded. Chargebacks count in the month they resolve."
+        description: >-
+          Total GMV recognised this month, in GBP: money in less refunds. Fraud,
+          pending chargebacks and duplicate refunds are excluded. Chargebacks
+          count in the month they resolve.
         data_tests:
           - not_null
 
       - name: recognised_revenue_gbp
-        description: "Platform revenue recognised this month, in GBP. The headline revenue measure. Chargebacks count in the month they resolve, so a closed month never changes."
+        description: >-
+          Platform revenue recognised this month, in GBP. The headline revenue
+          measure. Chargebacks count in the month they resolve, so a closed
+          month never changes.
         data_tests:
           - not_null
 
@@ -162,12 +199,17 @@ models:
           - not_null
 
       - name: originated_net_gmv_gbp
-        description: "Net GMV in GBP for the transactions that happened this month, counting chargebacks resolved as of the latest data. Past months are restated as chargebacks resolve."
+        description: >-
+          Net GMV in GBP for the transactions that happened this month, counting
+          chargebacks resolved as of the latest data. Past months are restated
+          as chargebacks resolve.
         data_tests:
           - not_null
 
       - name: originated_revenue_gbp
-        description: "Revenue in GBP for the transactions that happened this month, on the same basis as `originated_net_gmv_gbp`."
+        description: >-
+          Revenue in GBP for the transactions that happened this month, on the
+          same basis as `originated_net_gmv_gbp`.
         data_tests:
           - not_null
 
@@ -175,12 +217,16 @@ models:
         config:
           meta:
             additivity: semi_additive
-        description: "Chargebacks that had happened but were not yet resolved at month end, in GBP: the revenue still outstanding at that point."
+        description: >-
+          Chargebacks that had happened but were not yet resolved at month end,
+          in GBP: the revenue still outstanding at that point.
         data_tests:
           - not_null
 
       - name: contract_status
-        description: "Contract status at month end: `no contract`, `not started`, `active` or `ended`."
+        description: >-
+          Contract status at month end: `no contract`, `not started`, `active`
+          or `ended`.
         data_tests:
           - not_null
           - accepted_values:
@@ -191,10 +237,14 @@ models:
         config:
           meta:
             additivity: non_additive
-        description: "{{ doc('spend_threshold') }} Null for clients without a contract."
+        description: >-
+          {{ doc('spend_threshold') }} Null for clients without a contract.
 
       - name: monthly_contract_spend_gbp
-        description: "Contract spend added this month, in GBP: the sum of `contract_spend_gbp` for transactions that take effect this month. Null for clients without a contract."
+        description: >-
+          Contract spend added this month, in GBP: the sum of
+          `contract_spend_gbp` for transactions that take effect this month.
+          Null for clients without a contract.
         data_tests:
           - not_null:
               config:
@@ -204,7 +254,9 @@ models:
         config:
           meta:
             additivity: semi_additive
-        description: "Contract spend to date at month end, in GBP. Compared against `spend_threshold`. Null for clients without a contract."
+        description: >-
+          Contract spend to date at month end, in GBP. Compared against
+          `spend_threshold`. Null for clients without a contract.
         data_tests:
           - not_null:
               config:
@@ -214,17 +266,26 @@ models:
         config:
           meta:
             additivity: non_additive
-        description: "`cumulative_contract_spend_gbp` as a fraction of `spend_threshold` (1 = threshold reached). Null for clients without a contract."
+        description: >-
+          `cumulative_contract_spend_gbp` as a fraction of `spend_threshold` (1
+          = threshold reached). Null for clients without a contract.
         data_tests:
           - not_null:
               config:
                 where: "contract_status != 'no contract'"
 
       - name: discount_earned_date
-        description: "Date the client's contract spend first reached its threshold, from which the discounted margin applies, as at month end: null until the month in which it is reached. No client reaches it in the data provided."
+        description: >-
+          Date the client's contract spend first reached its threshold, from
+          which the discounted margin applies, as at month end: null until the
+          month in which it is reached. No client reaches it in the data
+          provided.
 
       - name: is_discount_active
-        description: "1 if the discounted margin applies at month end: the threshold has been reached and the contract is still active. Null for clients without a contract."
+        description: >-
+          1 if the discounted margin applies at month end: the threshold has
+          been reached and the contract is still active. Null for clients
+          without a contract.
         data_tests:
           - accepted_values:
               arguments:

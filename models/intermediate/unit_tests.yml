@@ -12,7 +12,10 @@ version: 2
 
 unit_tests:
   - name: exchange_rate_lookup_uses_latest_rate_on_or_before
-    description: "Each transaction is converted at the latest rate on or before its date: an exact-date rate when there is one, the earlier rate across a gap, and the last rate carried forward after the rates end."
+    description: >-
+      Each transaction is converted at the latest rate on or before its date: an
+      exact-date rate when there is one, the earlier rate across a gap, and the
+      last rate carried forward after the rates end.
     model: int_transactions_converted_to_gbp
     given:
       - input: ref('int_transactions_classified')
@@ -34,7 +37,10 @@ unit_tests:
         - {transaction_id: T3, gross_amount_gbp: 75.3}
 
   - name: discount_earned_from_threshold_crossing_until_contract_end
-    description: "The discount is earned on the transaction that takes running contract spend to the threshold, stays earned for the rest of the contract term, and is off once the contract ends."
+    description: >-
+      The discount is earned on the transaction that takes running contract
+      spend to the threshold, stays earned for the rest of the contract term,
+      and is off once the contract ends.
     model: int_transactions_with_contract_spend
     given:
       - input: ref('int_transactions_converted_to_gbp')
@@ -58,7 +64,10 @@ unit_tests:
         - {transaction_id: T4, running_contract_spend_gbp: 1203.25, is_discount_earned: 0}
 
   - name: refund_of_pre_contract_payment_does_not_reduce_spend
-    description: "A refund inside the contract window of a payment made before the contract started does not reduce contract spend, because the payment never counted toward it."
+    description: >-
+      A refund inside the contract window of a payment made before the contract
+      started does not reduce contract spend, because the payment never counted
+      toward it.
     model: int_transactions_with_contract_spend
     given:
       - input: ref('int_transactions_converted_to_gbp')
@@ -80,7 +89,10 @@ unit_tests:
         - {transaction_id: T3, contract_spend_gbp: 1002.5, running_contract_spend_gbp: 1002.5, is_discount_earned: 1}
 
   - name: discounted_margin_applies_only_once_earned_within_contract
-    description: "The discounted margin applies only when the discount is earned and the transaction is inside the contract window; otherwise the platform margin applies. Unrecognised transactions get no revenue or recognition date."
+    description: >-
+      The discounted margin applies only when the discount is earned and the
+      transaction is inside the contract window; otherwise the platform margin
+      applies. Unrecognised transactions get no revenue or recognition date.
     model: int_transactions_with_revenue
     given:
       - input: ref('int_transactions_with_contract_spend')
@@ -101,7 +113,10 @@ unit_tests:
         - {transaction_id: R4, applicable_fee_margin: 0.25, recognition_date: null, revenue_gbp: 0}
 
   - name: refund_reverses_revenue_at_original_payment_margin
-    description: "A refund reverses revenue at the margin its original payment was charged at, so a full refund nets to zero revenue even if the client's discount status changed in between."
+    description: >-
+      A refund reverses revenue at the margin its original payment was charged
+      at, so a full refund nets to zero revenue even if the client's discount
+      status changed in between.
     model: int_transactions_with_revenue
     given:
       - input: ref('int_transactions_with_contract_spend')

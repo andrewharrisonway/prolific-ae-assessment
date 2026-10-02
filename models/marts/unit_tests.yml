@@ -7,7 +7,11 @@ version: 2
 
 unit_tests:
   - name: chargeback_recognised_in_resolution_month
-    description: "A chargeback counts toward recognised revenue in the month it resolves, toward originated revenue in the month it happened, and is pending at every month end in between. A chargeback that never resolves is pending but never recognised."
+    description: >-
+      A chargeback counts toward recognised revenue in the month it resolves,
+      toward originated revenue in the month it happened, and is pending at
+      every month end in between. A chargeback that never resolves is pending
+      but never recognised.
     model: fct_client_monthly_revenue
     given:
       - input: ref('fct_transactions')
@@ -32,7 +36,10 @@ unit_tests:
         - {client_id: C005, month_start_date: '2024-02-01', recognised_net_gmv_gbp: 200.25, recognised_revenue_gbp: 50.0625, originated_net_gmv_gbp: 0, originated_revenue_gbp: 0, pending_chargebacks_gbp: 150.5, is_partial_month: 1, contract_status: no contract}
 
   - name: contract_status_and_discount_tracking
-    description: "Contract status and discount are reported as at each month end: not started before the contract, active (with the discount once earned) during it, ended after it, with contract spend carried forward."
+    description: >-
+      Contract status and discount are reported as at each month end: not
+      started before the contract, active (with the discount once earned) during
+      it, ended after it, with contract spend carried forward.
     model: fct_client_monthly_revenue
     given:
       - input: ref('fct_transactions')

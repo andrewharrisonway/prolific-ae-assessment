@@ -11,7 +11,9 @@ version: 2
 
 semantic_models:
   - name: transactions
-    description: "Platform transactions, one row per transaction. Revenue measures are aggregated by the date they are recognised by default."
+    description: >-
+      Platform transactions, one row per transaction. Revenue measures are
+      aggregated by the date they are recognised by default.
     model: ref('fct_transactions')
     defaults:
       agg_time_dimension: recognition_date
@@ -49,7 +51,9 @@ semantic_models:
         agg: sum
         expr: "CASE WHEN is_revenue_recognised = 1 THEN net_amount_gbp ELSE 0 END"
       - name: gross_gmv_gbp
-        description: "Recognised money in (payments and resolved chargebacks), in GBP, before refunds."
+        description: >-
+          Recognised money in (payments and resolved chargebacks), in GBP,
+          before refunds.
         agg: sum
         expr: "CASE WHEN is_revenue_recognised = 1 AND amount_direction = 1 THEN gross_amount_gbp ELSE 0 END"
       - name: transaction_count
