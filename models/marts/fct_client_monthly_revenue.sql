@@ -14,7 +14,6 @@ transactions AS (
         , gross_amount_gbp
         , net_amount_gbp
         , is_revenue_recognised
-        , is_in_contract_period
         , contract_spend_gbp
         , is_discount_earned
         , revenue_gbp
@@ -179,22 +178,6 @@ those that appear in the transactions.
         , DATE(spend_effective_date, 'start of month')
 )
 
-, naive_spend_by_month AS (
-    -- NOTE: the naive measure: every transaction in the contract window at its
-    -- gross amount, whatever its type. Kept for comparison only.
-    SELECT
-        client_id
-        , DATE(transaction_date, 'start of month') AS month_start_date
-        , SUM(gross_amount_gbp) AS monthly_naive_gross_spend_gbp
-    FROM
-        transactions
-    WHERE
-        is_in_contract_period = 1
-    GROUP BY
-        client_id
-        , DATE(transaction_date, 'start of month')
-)
-
 , discount_earned AS (
     SELECT
         client_id
@@ -231,10 +214,6 @@ those that appear in the transactions.
             WHEN cct.client_id IS NOT NULL
                 THEN COALESCE(csm.monthly_contract_spend_gbp, 0)
         END AS monthly_contract_spend_gbp
-        , CASE
-            WHEN cct.client_id IS NOT NULL
-                THEN COALESCE(nsm.monthly_naive_gross_spend_gbp, 0)
-        END AS monthly_naive_gross_spend_gbp
     FROM
         client_months AS cmo
     CROSS JOIN
@@ -265,11 +244,6 @@ those that appear in the transactions.
         ON
             cmo.client_id = csm.client_id
             AND cmo.month_start_date = csm.month_start_date
-    LEFT JOIN
-        naive_spend_by_month AS nsm
-        ON
-            cmo.client_id = nsm.client_id
-            AND cmo.month_start_date = nsm.month_start_date
 )
 
 , client_months_cumulative AS (
@@ -295,11 +269,6 @@ those that appear in the transactions.
             ORDER BY month_start_date
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) AS cumulative_contract_spend_gbp
-        , SUM(monthly_naive_gross_spend_gbp) OVER (
-            PARTITION BY client_id
-            ORDER BY month_start_date
-            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        ) AS naive_cumulative_gross_spend_gbp
     FROM
         client_months_combined
 )
@@ -321,7 +290,6 @@ those that appear in the transactions.
         , pending_chargebacks_gbp
         , monthly_contract_spend_gbp
         , cumulative_contract_spend_gbp
-        , naive_cumulative_gross_spend_gbp
         -- NOTE: only shown once the threshold has been reached by month end
         , CAST(
             CASE
@@ -350,11 +318,6 @@ those that appear in the transactions.
                 THEN 1
             ELSE 0
         END AS is_discount_active
-        , CASE
-            WHEN contract_start_date IS NULL THEN NULL
-            WHEN naive_cumulative_gross_spend_gbp >= spend_threshold THEN 1
-            ELSE 0
-        END AS is_naive_threshold_reached
     FROM
         client_months_cumulative
 )
@@ -382,8 +345,6 @@ those that appear in the transactions.
         , pct_of_spend_threshold
         , discount_earned_date
         , is_discount_active
-        , naive_cumulative_gross_spend_gbp
-        , is_naive_threshold_reached
     FROM
         client_months_status
 )

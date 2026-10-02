@@ -233,17 +233,3 @@ models:
           - not_null:
               config:
                 where: "contract_status != 'no contract'"
-
-      - name: naive_cumulative_gross_spend_gbp
-        config:
-          meta:
-            additivity: semi_additive
-        description: "For comparison only, not a recommended definition: every transaction in the contract window at its gross amount, whatever its type (fraud and refunds included as positive), to date at month end. This naive measure reaches the threshold for C001 and C002, where the qualifying measure never does. Null for clients without a contract."
-
-      - name: is_naive_threshold_reached
-        description: "For comparison only: 1 if `naive_cumulative_gross_spend_gbp` has reached `spend_threshold`. Null for clients without a contract."
-        data_tests:
-          - accepted_values:
-              arguments:
-                values: [0, 1]
-                quote: false

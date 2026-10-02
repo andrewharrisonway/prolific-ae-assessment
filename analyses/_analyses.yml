@@ -1,0 +1,5 @@
+version: 2
+
+analyses:
+  - name: naive_threshold_comparison
+    description: "For comparison only, not a recommended definition. No contracted client reaches its spend threshold under the project's contract spend rules, so this compares them, per contracted client and month, with a naive measure: every transaction in the contract window at its gross amount, whatever its type, so fraud and refunds add to spend and pending chargebacks and duplicate refunds count. The naive measure reaches the threshold for C001 and C002 in June 2024. It is an analysis rather than a mart column because nothing should report or depend on it: `dbt compile` renders it to SQL, but it is never built into a table."

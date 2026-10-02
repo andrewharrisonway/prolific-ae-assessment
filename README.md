@@ -64,7 +64,7 @@ dbt docs serve
 
 ### Continuous integration
 
-[`.github/workflows/dbt_ci.yml`](.github/workflows/dbt_ci.yml) runs on every push to `main` and every pull request: it follows the setup steps above on a clean machine, then runs `dbt seed`, `dbt build` (every model and test) and `sqlfluff lint`. It can also be run manually from the Actions tab.
+[`.github/workflows/dbt_ci.yml`](.github/workflows/dbt_ci.yml) runs on every push to `main` and every pull request: it follows the setup steps above on a clean machine, then runs `dbt seed`, `dbt build` (every model and test) and `sqlfluff lint` (models, tests and analyses). It can also be run manually from the Actions tab.
 
 ### Why the raw data is loaded as seeds
 
@@ -96,6 +96,7 @@ models/
 │                   int_transactions_with_revenue: fee margin, recognition date, revenue
 └── marts/          dim_dates, fct_transactions, fct_client_monthly_revenue, semantic layer
 tests/              singular tests (daily exchange rates, monthly mart reconciliation) and their descriptions
+analyses/           naive_threshold_comparison: the naive spend measure, for comparison only (compiled, never built)
 ```
 
 | Layer | Materialisation | Purpose |
@@ -208,7 +209,7 @@ Six payments are refunded more than once (one of them three times): 7 refunds in
 
 - **Duplicate refunds:** 6 payments were refunded more than once; the 7 extra refunds are excluded (see Duplicate refunds above). The test on refund links accepts these 6 and fails on any new ones.
 - **No client or currency reference data.** The source supplies no client master data and no currency list. Client IDs can only be validated by format, not checked against a list of real clients, and currencies are checked against those that have exchange rates. This is treated as a data quality gap in what was supplied: a client dimension is deliberately not deduced from transaction data, because a list built from the transactions would always agree with them and so could never catch an unknown client.
-- **No discount triggers during the period of observation.** No contracted client reaches its spend threshold within the data provided, so the discounted margin is never applied. The logic is implemented as I understand the business rules, rather than adjusted to make the discount trigger. Because that seemed odd, I also tried a more naive calculation: every transaction in the contract window at its gross amount, whatever its type. It does reach the threshold, for C001 and C002 in June 2024, and it is exposed in `fct_client_monthly_revenue` (`naive_cumulative_gross_spend_gbp`, `is_naive_threshold_reached`) for comparison. It works, but I don't defend it from a business standpoint: it counts fraud and refunds as spend.
+- **No discount triggers during the period of observation.** No contracted client reaches its spend threshold within the data provided, so the discounted margin is never applied. The logic is implemented as I understand the business rules, rather than adjusted to make the discount trigger. Because that seemed odd, I also tried a more naive calculation: every transaction in the contract window at its gross amount, whatever its type. It does reach the threshold, for C001 and C002 in June 2024, and the comparison is kept as an analysis, [`analyses/naive_threshold_comparison.sql`](analyses/naive_threshold_comparison.sql), rather than in the mart: `dbt compile` renders it to SQL, but it is never built into a table, so nothing can report or depend on it. It works, but I don't defend it from a business standpoint: it counts fraud and refunds as spend.
 
 ## Questions for stakeholders
 
@@ -251,7 +252,7 @@ Generic tests are defined under `data_tests:` in each folder's `_<directory>__mo
 SQL style is enforced with SQLFluff (`.sqlfluff`):
 
 ```bash
-sqlfluff lint models tests
+sqlfluff lint models tests analyses
 ```
 
 ## Status

@@ -29,7 +29,7 @@ How each transaction type behaves (sign, revenue, spend, resolution) is defined 
 
 ## Known findings
 
-- **No discount triggers during the period of observation:** no contracted client reaches its threshold. A naive measure, kept for comparison only, would cross it for C001 and C002.
+- **No discount triggers during the period of observation:** no contracted client reaches its threshold. A naive measure would cross it for C001 and C002; it is kept for comparison only, as the `naive_threshold_comparison` analysis, not in any model.
 - **Duplicate refunds:** 6 payments were refunded more than once; the 7 extra refunds are flagged (`is_duplicate_refund`) and excluded.
 - **No client or currency reference data** is supplied, so client IDs are validated by format only.
 - **July 2024 is a partial month** (`is_partial_month`): the data ends on 6 July.
