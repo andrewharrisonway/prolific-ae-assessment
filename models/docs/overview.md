@@ -23,7 +23,7 @@ How each transaction type behaves (sign, revenue, spend, resolution) is defined 
 ## Key rules
 
 - **Revenue is recognised** in the month it takes effect: the resolution month for chargebacks, the transaction month otherwise. The `originated_*` columns show the same transactions by the month they happened.
-- **Refunds** reverse revenue and spend. **Fraud** and **pending chargebacks** count toward neither.
+- **Refunds** reverse revenue (at the margin the original payment was charged at) and spend. **Fraud** and **pending chargebacks** count toward neither.
 - **GBP conversion** uses the latest rate on or before the transaction date.
 - **Contract discounts** apply once a client's spend within the contract term reaches its threshold, for the rest of the term. A refund only reduces contract spend if the payment it reverses counted toward it.
 

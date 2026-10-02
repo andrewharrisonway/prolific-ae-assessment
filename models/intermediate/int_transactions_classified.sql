@@ -70,6 +70,7 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
         , txn.transaction_amount_local AS gross_amount_local
         , trl.resolution_status
         , trl.resolution_date
+        , txn.linked_transaction_id
         , lnk.transaction_date AS linked_payment_date
         , tty.amount_direction
         , tty.recognises_revenue
@@ -111,6 +112,7 @@ ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
         , net_amount_local
         , resolution_status
         , resolution_date
+        , linked_transaction_id
         , linked_payment_date
         , is_duplicate_refund
         -- NOTE: chargebacks count toward spend when they resolve, so they

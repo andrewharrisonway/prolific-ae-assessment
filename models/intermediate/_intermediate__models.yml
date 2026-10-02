@@ -76,6 +76,9 @@ models:
       - name: resolution_date
         description: "{{ doc('resolution_date') }} Also null for transactions that need no resolution. Passed through from staging, where it is tested."
 
+      - name: linked_transaction_id
+        description: "{{ doc('linked_transaction_id') }} Passed through from staging, where it is tested."
+
       - name: linked_payment_date
         description: "{{ doc('linked_payment_date') }}"
         data_tests:
@@ -152,6 +155,9 @@ models:
 
       - name: resolution_date
         description: "{{ doc('resolution_date') }} Passed through from `int_transactions_classified`."
+
+      - name: linked_transaction_id
+        description: "{{ doc('linked_transaction_id') }} Passed through from `int_transactions_classified`."
 
       - name: linked_payment_date
         description: "{{ doc('linked_payment_date') }} Passed through from `int_transactions_classified`."
@@ -238,6 +244,9 @@ models:
       - name: resolution_date
         description: "{{ doc('resolution_date') }} Passed through from `int_transactions_converted_to_gbp`."
 
+      - name: linked_transaction_id
+        description: "{{ doc('linked_transaction_id') }} Passed through from `int_transactions_converted_to_gbp`."
+
       - name: is_duplicate_refund
         description: "{{ doc('is_duplicate_refund') }} Passed through from `int_transactions_converted_to_gbp`."
 
@@ -290,6 +299,10 @@ models:
 
   - name: int_transactions_with_revenue
     description: "One row per transaction, with the applicable fee margin, the date revenue is recognised, and revenue in GBP. The last intermediate step, read by `fct_transactions`."
+    data_tests:
+      - dbt_utils.equal_rowcount: # refunds look up their payment's margin: catches a join that fans out or drops rows
+          arguments:
+            compare_model: ref('int_transactions_with_contract_spend')
     columns:
       - name: transaction_id
         description: "{{ doc('transaction_id') }} Primary key of this model."

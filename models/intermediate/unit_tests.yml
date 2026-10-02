@@ -99,3 +99,24 @@ unit_tests:
         - {transaction_id: R2, applicable_fee_margin: 0.25, recognition_date: '2024-03-02', revenue_gbp: 25.125}
         - {transaction_id: R3, applicable_fee_margin: 0.25, recognition_date: '2024-03-03', revenue_gbp: 25.125}
         - {transaction_id: R4, applicable_fee_margin: 0.25, recognition_date: null, revenue_gbp: 0}
+
+  - name: refund_reverses_revenue_at_original_payment_margin
+    description: "A refund reverses revenue at the margin its original payment was charged at, so a full refund nets to zero revenue even if the client's discount status changed in between."
+    model: int_transactions_with_revenue
+    given:
+      - input: ref('int_transactions_with_contract_spend')
+        rows:
+          # charged the platform margin, refunded after the discount was earned
+          - {transaction_id: P1, transaction_type: payment, spend_effective_date: '2024-03-01', net_amount_gbp: 100.5, platform_fee_margin: 0.25, discounted_fee_margin: 0.125, is_in_contract_period: 1, is_discount_earned: 0, is_revenue_recognised: 1}
+          - {transaction_id: R1, transaction_type: refund, linked_transaction_id: P1, spend_effective_date: '2024-03-20', net_amount_gbp: -100.5, platform_fee_margin: 0.25, discounted_fee_margin: 0.125, is_in_contract_period: 1, is_discount_earned: 1, is_revenue_recognised: 1}
+          # charged the discounted margin, refunded after the contract ended
+          - {transaction_id: P2, transaction_type: payment, spend_effective_date: '2024-06-20', net_amount_gbp: 200.25, platform_fee_margin: 0.25, discounted_fee_margin: 0.125, is_in_contract_period: 1, is_discount_earned: 1, is_revenue_recognised: 1}
+          - {transaction_id: R2, transaction_type: refund, linked_transaction_id: P2, spend_effective_date: '2024-07-05', net_amount_gbp: -200.25, platform_fee_margin: 0.25, discounted_fee_margin: 0.125, is_in_contract_period: 0, is_discount_earned: 0, is_revenue_recognised: 1}
+    expect:
+      rows:
+        - {transaction_id: P1, applicable_fee_margin: 0.25, revenue_gbp: 25.125}
+        # not the discounted margin in effect on the refund date
+        - {transaction_id: R1, applicable_fee_margin: 0.25, revenue_gbp: -25.125}
+        - {transaction_id: P2, applicable_fee_margin: 0.125, revenue_gbp: 25.03125}
+        # not the platform margin in effect after the contract ended
+        - {transaction_id: R2, applicable_fee_margin: 0.125, revenue_gbp: -25.03125}

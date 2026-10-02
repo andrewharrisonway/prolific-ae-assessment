@@ -15,6 +15,7 @@ transactions AS (
         , net_amount_local
         , resolution_status
         , resolution_date
+        , linked_transaction_id
         , linked_payment_date
         , is_duplicate_refund
         , spend_effective_date
@@ -66,6 +67,7 @@ transactions AS (
         , txn.net_amount_local
         , txn.resolution_status
         , txn.resolution_date
+        , txn.linked_transaction_id
         , txn.linked_payment_date
         , txn.is_duplicate_refund
         , txn.spend_effective_date

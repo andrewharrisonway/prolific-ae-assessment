@@ -146,7 +146,7 @@ How each transaction type behaves is defined as data in the [`transaction_types`
 | `chargeback` | 1 | 1 | 1 | 1 |
 | `fraud` | 1 | 0 | 0 | 0 |
 
-- Refunds are negated, so they reduce both revenue and contract spend.
+- Refunds are negated, so they reduce both revenue and contract spend. A refund reverses revenue at the margin its original payment was charged at, not the margin in effect on the refund date, so a full refund nets to zero revenue even if the client's discount status changed in between.
 - Fraud contributes nothing to revenue or spend.
 - Chargebacks count only once resolved, and towards spend from their resolution date. Pending chargebacks contribute zero.
 

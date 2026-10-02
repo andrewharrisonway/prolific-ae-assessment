@@ -178,7 +178,7 @@ models:
                 field: currency
 
       - name: linked_transaction_id
-        description: "For refunds, references the transaction_id of the original payment being refunded. Null for all other transaction types."
+        description: "{{ doc('linked_transaction_id') }}"
         data_tests:
           - not_null:
               config:

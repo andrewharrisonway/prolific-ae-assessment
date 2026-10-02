@@ -17,6 +17,7 @@ transactions AS (
         , net_amount_gbp
         , resolution_status
         , resolution_date
+        , linked_transaction_id
         , linked_payment_date
         , is_duplicate_refund
         , spend_effective_date
@@ -66,6 +67,7 @@ refund of a pre-contract payment would reduce spend that was never added.
         , txn.net_amount_gbp
         , txn.resolution_status
         , txn.resolution_date
+        , txn.linked_transaction_id
         , txn.is_duplicate_refund
         , txn.spend_effective_date
         , txn.is_revenue_recognised
@@ -108,6 +110,7 @@ total below (and the monthly mart) sum the same values.
         , net_amount_gbp
         , resolution_status
         , resolution_date
+        , linked_transaction_id
         , is_duplicate_refund
         , spend_effective_date
         , is_revenue_recognised
@@ -145,6 +148,7 @@ total below (and the monthly mart) sum the same values.
         , net_amount_gbp
         , resolution_status
         , resolution_date
+        , linked_transaction_id
         , is_duplicate_refund
         , spend_effective_date
         , is_revenue_recognised
@@ -178,6 +182,7 @@ total below (and the monthly mart) sum the same values.
         , net_amount_gbp
         , resolution_status
         , resolution_date
+        , linked_transaction_id
         , is_duplicate_refund
         , spend_effective_date
         , is_revenue_recognised
