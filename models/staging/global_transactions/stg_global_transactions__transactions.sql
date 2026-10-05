@@ -13,7 +13,7 @@ raw_input AS (
         , CAST(client_id AS varchar(7)) AS client_id
         , CAST(transaction_amount AS numeric(8, 2)) AS transaction_amount
         , CAST(transaction_type AS varchar(12)) AS transaction_type
-        , CAST(platform_fee_margin AS numeric(1, 2)) AS platform_fee_margin
+        , CAST(platform_fee_margin AS numeric(3, 2)) AS platform_fee_margin
         , CAST(currency AS varchar(3)) AS transaction_currency
         , CAST(linked_transaction_id AS varchar(10)) AS linked_transaction_id
         , CAST(DATE(transaction_date) AS text) AS transaction_date
