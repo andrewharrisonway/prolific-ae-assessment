@@ -47,13 +47,14 @@ semantic_models:
         description: "Platform revenue in GBP."
         agg: sum
       - name: net_gmv_gbp
-        description: "Recognised money in less refunds, in GBP."
+        description: >-
+          Recognised money in less refunds and resolved chargebacks, in GBP.
         agg: sum
         expr: "CASE WHEN is_revenue_recognised = 1 THEN net_amount_gbp ELSE 0 END"
       - name: gross_gmv_gbp
         description: >-
-          Recognised money in (payments and resolved chargebacks), in GBP,
-          before refunds.
+          Recognised money in (payments), in GBP, before refunds and
+          chargebacks.
         agg: sum
         expr: "CASE WHEN is_revenue_recognised = 1 AND amount_direction = 1 THEN gross_amount_gbp ELSE 0 END"
       - name: transaction_count
@@ -72,14 +73,14 @@ metrics:
 
   - name: net_gmv
     label: "Net GMV (GBP)"
-    description: "Recognised GMV after refunds, in GBP."
+    description: "Recognised GMV after refunds and chargebacks, in GBP."
     type: simple
     type_params:
       measure: net_gmv_gbp
 
   - name: gross_gmv
     label: "Gross GMV (GBP)"
-    description: "Recognised GMV before refunds, in GBP."
+    description: "Recognised GMV before refunds and chargebacks, in GBP."
     type: simple
     type_params:
       measure: gross_gmv_gbp
