@@ -162,7 +162,8 @@ models:
       - name: is_partial_month
         description: >-
           1 if the data ends before this month does. July 2024 is partial: the
-          data ends on 6 July and the month contains refunds only.
+          data ends on 6 July and the month contains only refunds and chargeback
+          resolutions.
         data_tests:
           - not_null
           - accepted_values:
@@ -172,24 +173,24 @@ models:
 
       - name: recognised_gross_gmv_gbp
         description: >-
-          Money in (payments and resolved chargebacks) recognised this month, in
-          GBP, before refunds.
+          Money in (payments) recognised this month, in GBP, before refunds and
+          chargebacks.
         data_tests:
           - not_null
 
       - name: recognised_net_gmv_gbp
         description: >-
-          Total GMV recognised this month, in GBP: money in less refunds. Fraud,
-          pending chargebacks and duplicate refunds are excluded. Chargebacks
-          count in the month they resolve.
+          Total GMV recognised this month, in GBP: money in less refunds and
+          resolved chargebacks. Fraud, pending chargebacks and duplicate refunds
+          are excluded. Chargebacks reduce GMV in the month they resolve.
         data_tests:
           - not_null
 
       - name: recognised_revenue_gbp
         description: >-
           Platform revenue recognised this month, in GBP. The headline revenue
-          measure. Chargebacks count in the month they resolve, so a closed
-          month never changes.
+          measure. Chargebacks reverse revenue in the month they resolve, so a
+          closed month never changes.
         data_tests:
           - not_null
 
@@ -219,7 +220,8 @@ models:
             additivity: semi_additive
         description: >-
           Chargebacks that had happened but were not yet resolved at month end,
-          in GBP: the revenue still outstanding at that point.
+          at their recorded amount in GBP (positive): the GMV that would be
+          reversed, at the fee margin, if they resolve.
         data_tests:
           - not_null
 
