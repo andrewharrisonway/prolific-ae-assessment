@@ -70,5 +70,5 @@ The `transaction_id` of the chargeback this resolution applies to.
 {% enddocs %}
 
 {% docs raw__resolution_date %}
-Date the chargeback was resolved, as `dd/mm/yyyy` text (unlike every other date in the data). Null while pending.
+Date the chargeback was resolved, as `dd/mm/yyyy` text. Null while pending.
 {% enddocs %}

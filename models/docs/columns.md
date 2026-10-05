@@ -26,7 +26,7 @@ ISO currency code of the transaction's amounts: `GBP` or `USD`.
 {% enddocs %}
 
 {% docs amount_direction %}
-Sign applied to the recorded amount: 1 for money in, -1 for money returned (refunds). Fraud is 1, but fraud is excluded from revenue and spend by its flags.
+Sign applied to the recorded amount: 1 for money in (payments), -1 for money returned (refunds and chargebacks). Fraud is 1, but fraud is excluded from revenue and spend by its flags.
 {% enddocs %}
 
 {% docs is_duplicate_refund %}
@@ -54,7 +54,7 @@ Recorded amount converted to GBP at the latest rate on or before the transaction
 {% enddocs %}
 
 {% docs net_amount_gbp %}
-Signed amount in GBP: negative for refunds, positive otherwise.
+Signed amount in GBP: `gross_amount_gbp * amount_direction`, so negative for refunds and chargebacks, positive otherwise.
 {% enddocs %}
 
 {% docs is_revenue_recognised %}
@@ -86,11 +86,11 @@ Date the transaction counts toward contract spend: the resolution date for resol
 {% enddocs %}
 
 {% docs contract_spend_gbp %}
-This transaction's contribution to its client's contract spend, in GBP. The net amount if the transaction is inside the contract window and qualifies (see `is_spend_qualifying`); a refund only counts if the payment it reverses was also inside the window. Otherwise 0. Null for clients without a contract.
+This transaction's contribution to its client's contract spend, in GBP. The net amount if the transaction is inside the contract window and qualifies (see `is_spend_qualifying`). A refund only counts if the payment it reverses was also inside the window; a chargeback only counts if it was recorded inside the window and resolved inside it. Otherwise 0. Null for clients without a contract.
 {% enddocs %}
 
 {% docs is_discount_earned %}
-1 once the client's cumulative contract spend has reached its threshold within the contract term. It stays 1 for the rest of the term, even if refunds later reduce spend. 0 before that or outside the term; null for clients without a contract.
+1 once the client's cumulative contract spend has reached its threshold within the contract term. It stays 1 for the rest of the term, even if refunds or chargebacks later reduce spend. 0 before that or outside the term; null for clients without a contract.
 {% enddocs %}
 
 {% docs contract_start_date %}
