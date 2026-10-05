@@ -88,6 +88,36 @@ unit_tests:
         # running spend 1,002.5 (not 500): reaches the threshold
         - {transaction_id: T3, contract_spend_gbp: 1002.5, running_contract_spend_gbp: 1002.5, is_discount_earned: 1}
 
+  - name: chargeback_reduces_spend_only_inside_contract_window
+    description: >-
+      A resolved chargeback reverses contract spend, like a refund, but only if
+      the transaction it reverses was recorded inside the contract window and it
+      resolves inside the window too. Reducing spend never takes away a discount
+      already earned.
+    model: int_transactions_with_contract_spend
+    given:
+      - input: ref('int_transactions_converted_to_gbp')
+        rows:
+          # recorded before the contract starts, resolved inside it
+          - {transaction_id: CB1, client_id: C004, transaction_type: chargeback, transaction_date: '2024-02-25', spend_effective_date: '2024-03-03', net_amount_gbp: -100.5, is_spend_qualifying: 1}
+          - {transaction_id: T1, client_id: C004, transaction_type: payment, transaction_date: '2024-03-05', spend_effective_date: '2024-03-05', net_amount_gbp: 1002.5, is_spend_qualifying: 1}
+          # recorded and resolved inside the contract
+          - {transaction_id: CB2, client_id: C004, transaction_type: chargeback, transaction_date: '2024-03-10', spend_effective_date: '2024-03-20', net_amount_gbp: -200.25, is_spend_qualifying: 1}
+          # recorded inside the contract, resolved after it ends
+          - {transaction_id: CB3, client_id: C004, transaction_type: chargeback, transaction_date: '2024-03-25', spend_effective_date: '2024-04-05', net_amount_gbp: -50.5, is_spend_qualifying: 1}
+      - input: ref('int_client_contracts_windowed')
+        rows:
+          - {client_id: C004, contract_start_date: '2024-03-01', contract_end_date: '2024-04-01', spend_threshold: 1000, discounted_fee_margin: 0.125}
+    expect:
+      rows:
+        # reverses a pre-contract transaction: does not reduce spend
+        - {transaction_id: CB1, contract_spend_gbp: 0, running_contract_spend_gbp: 0, is_discount_earned: 0}
+        - {transaction_id: T1, contract_spend_gbp: 1002.5, running_contract_spend_gbp: 1002.5, is_discount_earned: 1}
+        # reduces spend below the threshold, but the discount stays earned
+        - {transaction_id: CB2, contract_spend_gbp: -200.25, running_contract_spend_gbp: 802.25, is_discount_earned: 1}
+        # resolves after the contract ends: does not reduce spend
+        - {transaction_id: CB3, contract_spend_gbp: 0, running_contract_spend_gbp: 802.25, is_discount_earned: 1}
+
   - name: discounted_margin_applies_only_once_earned_within_contract
     description: >-
       The discounted margin applies only when the discount is earned and the
@@ -104,7 +134,7 @@ unit_tests:
           # no contract: platform margin
           - {transaction_id: R3, transaction_type: payment, spend_effective_date: '2024-03-03', net_amount_gbp: 100.5, platform_fee_margin: 0.25, is_revenue_recognised: 1}
           # a pending chargeback: no revenue, no recognition date
-          - {transaction_id: R4, transaction_type: chargeback, spend_effective_date: '2024-03-04', net_amount_gbp: 100.5, platform_fee_margin: 0.25, is_revenue_recognised: 0}
+          - {transaction_id: R4, transaction_type: chargeback, spend_effective_date: '2024-03-04', net_amount_gbp: -100.5, platform_fee_margin: 0.25, is_revenue_recognised: 0}
     expect:
       rows:
         - {transaction_id: R1, applicable_fee_margin: 0.125, recognition_date: '2024-03-01', revenue_gbp: 12.5625}
