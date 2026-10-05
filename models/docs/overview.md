@@ -23,9 +23,9 @@ How each transaction type behaves (sign, revenue, spend, resolution) is defined 
 ## Key rules
 
 - **Revenue is recognised** in the month it takes effect: the resolution month for chargebacks, the transaction month otherwise. The `originated_*` columns show the same transactions by the month they happened.
-- **Refunds** reverse revenue (at the margin the original payment was charged at) and spend. **Fraud** and **pending chargebacks** count toward neither.
+- **Refunds** reverse revenue (at the margin the original payment was charged at) and spend. **Resolved chargebacks** also reverse revenue, GMV and spend, in the month they resolve. **Fraud** and **pending chargebacks** count toward neither.
 - **GBP conversion** uses the latest rate on or before the transaction date.
-- **Contract discounts** apply once a client's spend within the contract term reaches its threshold, for the rest of the term. A refund only reduces contract spend if the payment it reverses counted toward it.
+- **Contract discounts** apply once a client's spend within the contract term reaches its threshold, for the rest of the term. A refund or chargeback only reduces contract spend if what it reverses counted toward it.
 
 ## Known findings
 
@@ -37,7 +37,7 @@ How each transaction type behaves (sign, revenue, spend, resolution) is defined 
 ## Reading these docs
 
 - Columns tagged `meta.additivity: semi_additive` are positions at month end: sum them across clients, never across months. `non_additive` columns should never be summed.
-- Each column is tested once, in the layer where it is created or changed; passed-through columns say where they are tested.
+- Each column is tested once, in the layer where it is created or changed.
 
 The full write-up, including assumptions and setup, is in the [project README](https://github.com/andrewharrisonway/prolific-ae-assessment#readme).
 {% enddocs %}
