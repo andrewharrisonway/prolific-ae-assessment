@@ -44,7 +44,8 @@ LOGIC/CHOICES:
 
 How each transaction type behaves is defined in the `transaction_types` seed,
 not in this model:
-- amount_direction: refunds are -1, so net amounts aggregate correctly.
+- amount_direction: refunds and chargebacks are -1 (money returned), so net
+  amounts aggregate correctly.
 - recognises_revenue / counts_toward_spend: fraud counts toward neither.
 - requires_resolution: chargebacks only count once resolved.
 
@@ -56,7 +57,11 @@ flags every refund after the first (is_duplicate_refund); this model excludes
 them from revenue and spend. The rows are kept so the exclusion is visible
 downstream.
 
-ASSUMPTION: Chargebacks happen instantaneously when a transaction occurs
+ASSUMPTION: a chargeback goes directly into its "chargeback" state when the
+transaction is recorded, so its transaction_date is when that transaction was
+recorded and it has no linked transaction. Refunds, by contrast, are placed
+against an earlier payment and related to it by foreign key
+(linked_transaction_id).
 */
 
 , transactions_joined AS (

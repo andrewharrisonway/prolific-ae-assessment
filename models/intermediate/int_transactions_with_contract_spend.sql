@@ -50,6 +50,11 @@ rate will apply for the remainder of the term.
 A refund only reduces contract spend if the payment it reverses counted toward
 that spend, i.e. the payment fell inside the contract window. Otherwise a
 refund of a pre-contract payment would reduce spend that was never added.
+
+Chargebacks follow the same rule: one only reduces contract spend if the
+transaction it reverses (recorded on its transaction_date, see
+int_transactions_classified) fell inside the contract window, and it takes
+effect (on its resolution date) inside the window too.
 */
 
 , transactions_with_contracts AS (
@@ -78,6 +83,12 @@ refund of a pre-contract payment would reduce spend that was never added.
             txn.transaction_date >= cct.contract_start_date
             AND txn.transaction_date < cct.contract_end_date
         ) AS is_in_contract_period
+        -- NOTE: differs from is_in_contract_period only for chargebacks,
+        -- which take effect on their resolution date
+        , (
+            txn.spend_effective_date >= cct.contract_start_date
+            AND txn.spend_effective_date < cct.contract_end_date
+        ) AS is_effective_in_contract_period
         -- NOTE: null unless this is a refund of a contracted client
         , (
             txn.linked_payment_date >= cct.contract_start_date
@@ -121,9 +132,11 @@ total below (and the monthly mart) sum the same values.
         , CASE
             -- non-contract clients have no contract spend
             WHEN is_in_contract_period IS NULL THEN NULL
-            -- refunds only reduce spend if their payment counted toward it
+            -- reversals only reduce spend if what they reverse counted
+            -- toward it, and they take effect inside the window
             WHEN
                 is_in_contract_period = 1
+                AND is_effective_in_contract_period = 1
                 AND is_spend_qualifying = 1
                 AND COALESCE(is_linked_payment_in_contract_period, 1) = 1
                 THEN net_amount_gbp
