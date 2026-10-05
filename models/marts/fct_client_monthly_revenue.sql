@@ -55,7 +55,8 @@ Two bases for the same recognised transactions:
   chargebacks resolved as of the latest data, so past months are restated as
   chargebacks resolve.
 Both bases contain the same transactions, so their totals per client agree;
-pending_chargebacks_gbp shows what is still outstanding at each month end.
+pending_chargebacks_gbp shows the chargebacks still unresolved at each month
+end, which would reduce GMV and revenue if they resolve.
 
 NB: the source supplies no client master data, so the clients reported are
 those that appear in the transactions.
@@ -142,11 +143,12 @@ those that appear in the transactions.
 , pending_at_month_end AS (
     -- NOTE: a transaction with a resolution status is one that requires
     -- resolution (a chargeback); it is pending at a month end if it happened
-    -- by then but was not resolved by then
+    -- by then but was not resolved by then. Reported at its recorded (gross)
+    -- amount, as a positive exposure: the GMV that resolution would reverse
     SELECT
         cmo.client_id
         , cmo.month_start_date
-        , SUM(txn.net_amount_gbp) AS pending_chargebacks_gbp
+        , SUM(txn.gross_amount_gbp) AS pending_chargebacks_gbp
     FROM
         client_months AS cmo
     INNER JOIN
