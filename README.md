@@ -14,8 +14,8 @@ The original brief is in [task_instructions.md](task_instructions.md).
 
 | Decision | Alternative considered | Why |
 |---|---|---|
-| Recognise chargeback revenue in the month it resolves, and also report each transaction's original month | Transaction month only | The brief recognises only resolved chargebacks; this way past months don't move as chargebacks resolve |
-| Treat a resolved chargeback as positive revenue | Treat it as a reversal | No chargeback matches a payment or links to one, so they look like standalone events. The data has no outcome field, so this is an open question (see [Questions for stakeholders](#questions-for-stakeholders)) |
+| Recognise chargebacks in the month they resolve, and also report each transaction's original month | Transaction month only | The brief recognises only resolved chargebacks; this way past months don't move as chargebacks resolve |
+| Treat a resolved chargeback as a reversal of revenue, GMV and contract spend | Treat it as positive revenue | A chargeback returns money to the cardholder, so like a refund it reduces revenue. The data has no outcome field, and no chargeback links to a payment, so this is an open question (see [Questions for stakeholders](#questions-for-stakeholders)) |
 | Apply the discount from the transaction that crosses the threshold, for the rest of the term | Back-date it to the start of the term | The most direct reading of the brief; also an open question |
 | Reverse a refund at its payment's margin but the refund date's exchange rate | The margin in effect on the refund date; the payment's exchange rate | The same margin applies both ways, so a full refund leaves no revenue behind except from exchange-rate movement; the client gets back the full amount in their own currency |
 | Flag duplicate refunds and exclude them from revenue and spend | Keep every refund as recorded | Every refund is for the full payment amount, so a second refund of the same payment cannot be genuine |
@@ -24,7 +24,7 @@ The original brief is in [task_instructions.md](task_instructions.md).
 
 **Key findings:** no contracted client reaches its discount threshold in the data provided; 7 duplicate refunds (£35,033 of revenue) are excluded; the source has no client or currency reference data; July 2024 is a partial month. See [Known findings](#known-findings).
 
-**How it's verified:** CI builds the project from a clean checkout and runs every test on each push (badge above). 129 data tests check every model, and 7 unit tests cover logic the real data never exercises (the discount, contract windows, refund margins, exchange-rate gaps, chargebacks moving between months). A reconciliation test checks the monthly mart against the transaction fact.
+**How it's verified:** CI builds the project from a clean checkout and runs every test on each push (badge above). 128 data tests check every model, and 8 unit tests cover logic the real data never exercises (the discount, contract windows, refund margins, exchange-rate gaps, chargebacks moving between months and reversing contract spend). A reconciliation test checks the monthly mart against the transaction fact.
 
 ## Getting started
 
@@ -140,15 +140,15 @@ dim_dates (fixed spine, no parents) ──────────────�
 | `fct_transactions` | transaction | Transaction-level fact behind the monthly mart and the semantic layer |
 | `dim_dates` | day | Fixed date spine, 2020 to 2030 (set by project vars): the month spine for the mart and the MetricFlow time spine |
 
-**Every client appears in every month** (January to July 2024), so months without activity still show, and running totals carry forward. July is flagged `is_partial_month`: the data ends on 6 July, and the month contains only refunds and chargeback resolutions.
+**Every client appears in every month** (January to July 2024), so months without activity still show, and running totals carry forward. July is flagged `is_partial_month`: the data ends on 6 July, and the month contains only refunds and chargeback resolutions, so its recognised revenue is negative.
 
 **Revenue is reported on two bases**, over the same recognised transactions:
 
 - **Recognised** (`recognised_*`), the headline: revenue lands in the month it is recognised, which for chargebacks is the month they resolve. A month's figures don't change when its chargebacks later resolve (though late-arriving or corrected source data would still change them; see [Production considerations](#production-considerations)).
 - **Originated** (`originated_*`): revenue lands in the month the transaction happened, counting chargebacks resolved as of the latest data, so past months are restated as chargebacks resolve.
-- `pending_chargebacks_gbp` shows chargebacks still unresolved at each month end. Per client, the two bases total to the same figures; a singular test checks this against `fct_transactions`.
+- `pending_chargebacks_gbp` shows chargebacks still unresolved at each month end, at their recorded amount: the GMV that would be reversed if they resolve. Per client, the two bases total to the same figures; a singular test checks this against `fct_transactions`.
 
-**GMV** is reported gross (money in: payments and resolved chargebacks) and net (after refunds). Fraud, pending chargebacks and duplicate refunds are excluded from both.
+**GMV** is reported gross (money in: payments) and net (after refunds and resolved chargebacks). Fraud, pending chargebacks and duplicate refunds are excluded from both.
 
 **Spend threshold tracking and discount status** are as at each month end: contract status (`no contract`, `not started`, `active`, `ended`), contract spend for the month and to date, progress towards the threshold, the date the threshold was reached, and whether the discount is active.
 
@@ -166,18 +166,18 @@ How each transaction type behaves is defined as data in the [`transaction_types`
 |---|---|---|---|---|
 | `payment` | 1 | 1 | 1 | 0 |
 | `refund` | -1 | 1 | 1 | 0 |
-| `chargeback` | 1 | 1 | 1 | 1 |
+| `chargeback` | -1 | 1 | 1 | 1 |
 | `fraud` | 1 | 0 | 0 | 0 |
 
-- Refunds are negated, so they reduce both revenue and contract spend. A refund reverses revenue at the margin its original payment was charged at, not the margin in effect on the refund date, so a full refund nets to zero revenue (apart from exchange-rate movement, below) even if the client's discount status changed in between.
+- Refunds and chargebacks are negated, so they reduce revenue, GMV and contract spend. A refund reverses revenue at the margin its original payment was charged at, not the margin in effect on the refund date, so a full refund nets to zero revenue (apart from exchange-rate movement, below) even if the client's discount status changed in between.
 - Fraud contributes nothing to revenue or spend.
-- Chargebacks count only once resolved, and towards spend from their resolution date. Pending chargebacks contribute zero.
+- Chargebacks count only once resolved, and reduce revenue and spend from their resolution date. Pending chargebacks contribute zero.
 
 The intermediate models keep both the recorded amount (`gross_amount_*`, always positive) and the signed amount (`net_amount_*`). Revenue is `net_amount_gbp × applicable_fee_margin` for recognised transactions, and 0 otherwise.
 
-With four types, a seed is more structure than strictly needed. It is used deliberately: the business rules sit in one reviewable file, the staging model validates transaction types against it, and most of a type's behaviour (direction, revenue, spend, resolution) is data rather than logic. Rules specific to refunds, such as duplicate detection and the refund sign tests, still name the type in code.
+With four types, a seed is more structure than strictly needed. It is used deliberately: the business rules sit in one reviewable file, the staging model validates transaction types against it, and most of a type's behaviour (direction, revenue, spend, resolution) is data rather than logic. Rules specific to refunds, such as duplicate detection, still name the type in code; the sign tests key off `amount_direction`.
 
-Every refund links to a payment from the same client, in the same currency, for exactly the full payment amount. Chargebacks have no linked transaction and are treated as standalone events.
+Every refund links to a payment from the same client, in the same currency, for exactly the full payment amount. Chargebacks have no linked transaction. **Assumption:** a chargeback goes directly into its `chargeback` state when the transaction is recorded, so its `transaction_date` is when that transaction was recorded. Refunds, by contrast, are placed against an earlier payment and related to it by foreign key (`linked_transaction_id`).
 
 ### Duplicate refunds
 
@@ -191,7 +191,7 @@ Six payments are refunded more than once (one of them three times): 7 refunds in
 
 - All amounts are converted to GBP using the latest available rate **on or before** the transaction date.
 - Exchange rates end on 2024-06-30 but transactions run into July 2024, so the last available rate is carried forward.
-- Chargebacks are converted at the rate on their transaction date, even when their revenue is recognised later, in the month they resolve.
+- Chargebacks are converted at the rate on their transaction date, even when they are recognised later, in the month they resolve.
 - Refunds are converted at the rate on the refund date, not the original payment's rate. The client is refunded the full amount in the currency they paid, so the GBP cost of the refund is whatever that amount is worth on the day. Any difference from exchange-rate movement between payment and refund is treated as a cost of doing business, not something to pass on to the client. In this data, USD payment and refund pairs leave a net +£1,486 of GMV (+£297 revenue) from rate movement.
 
 ### Contract discounts
@@ -200,6 +200,7 @@ Six payments are refunded more than once (one of them three times): 7 refunds in
 - A contract is active from `contract_start_date` (inclusive) for `contract_duration_months` (end date exclusive).
 - Cumulative qualifying spend in GBP is tracked within the contract window, ordered by the date each transaction takes effect (resolution date for chargebacks). Fraud and pending chargebacks do not count.
 - A refund only reduces contract spend if the payment it reverses counted toward it, i.e. the payment fell inside the contract window. For example, C004's contract starts on 2024-03-01, and a refund on that day of a February payment (£64,580) does not reduce C004's spend, because the payment was never added to it.
+- Chargebacks follow the same rule: a resolved chargeback only reduces contract spend if it was recorded inside the contract window (the transaction it reverses) and resolves inside it too. For example, C003's contract starts on 2024-02-01, and a chargeback recorded on 2024-01-27 and resolved on 2024-02-07 (£23,415) does not reduce C003's spend.
 - Once cumulative spend reaches `spend_threshold`, the discounted fee margin applies for the remainder of the contract term. The discount applies from the transaction that crosses the threshold.
 - **Assumption:** `spend_threshold` is in GBP. The contracts table does not state a currency, and each client transacts in both GBP and USD.
 
@@ -220,7 +221,8 @@ Questions I would raise before relying on these figures, with the assumption the
 
 | Question | Assumption made | What would change |
 |---|---|---|
-| What does "resolved" mean for a chargeback, and in whose favour is it resolved? | Resolved means settled, and the chargeback counts as positive revenue in its resolution month | If resolved in the customer's favour, chargebacks would be reversals and reduce revenue |
+| What does "resolved" mean for a chargeback, and in whose favour is it resolved? | Resolved means the chargeback succeeded: the money goes back to the cardholder, reversing revenue, GMV and contract spend in the resolution month | If resolved in the client's favour, the money is kept and a resolved chargeback would not reduce revenue |
+| No chargeback matches a payment by client and amount, and none links to one. Where is the original transaction? | Each chargeback goes directly into its `chargeback` state when the transaction is recorded, and reverses money received | If the chargeback row is the only record of that money, a resolved chargeback should net to zero rather than reduce revenue |
 | Which currency is `spend_threshold` in? | GBP | In USD, thresholds would be lower in GBP terms, bringing clients closer to their discounts |
 | Once a client reaches its threshold, does the discount apply from then on, or back-dated to the start of the term? Can contracts have tiers? | From the transaction that crosses the threshold, for the rest of the term; one tier | Back-dating would require recalculating earlier months' revenue when the threshold is reached |
 | Can a client have more than one contract, e.g. on renewal? | One contract per client (tested) | Contract windows would need a contract key, not just the client |
@@ -254,7 +256,7 @@ Generic tests are defined under `data_tests:` in each folder's `_<directory>__mo
 - Relationships between transactions, refunds, resolutions and currencies
 - Conditional rules, e.g. only refunds have a linked transaction, and only resolved chargebacks have a resolution date
 - Hard and soft (warning) ranges on fee margins and exchange rates
-- Unit tests (`unit_tests.yml` in `intermediate/` and `marts/`) on small hand-built fixtures, each against the model that owns the logic, for cases the real data never exercises: the discount being earned and ending with the contract, refunds of pre-contract payments, refunds reversing at their payment's margin, the discounted margin applying only once earned, exchange-rate gaps, chargebacks moving between months, and contract and discount status by month
+- Unit tests (`unit_tests.yml` in `intermediate/` and `marts/`) on small hand-built fixtures, each against the model that owns the logic, for cases the real data never exercises: the discount being earned and ending with the contract, refunds of pre-contract payments, refunds reversing at their payment's margin, chargebacks reducing spend only inside the contract window, the discounted margin applying only once earned, exchange-rate gaps, chargebacks moving between months, and contract and discount status by month
 - Singular tests in `tests/`: exchange rates are daily with no gaps, and the monthly mart reconciles to `fct_transactions`
 
 SQL style is enforced with SQLFluff (`.sqlfluff`):
@@ -267,7 +269,7 @@ sqlfluff lint models tests analyses
 
 - [x] Staging models and tests
 - [x] Intermediate transaction model
-- [x] Recognise chargeback revenue in the month of resolution
+- [x] Recognise chargebacks in the month of resolution
 - [x] Monthly revenue mart: revenue by client and month, GMV in GBP, spend threshold tracking, discount status
 - [x] Tests on the intermediate and mart layers
 - [x] Semantic layer definitions
