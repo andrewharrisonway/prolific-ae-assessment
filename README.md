@@ -171,6 +171,8 @@ Cylinders are tables loaded by `dbt seed` (raw sources, read with `source()`, an
 | `fct_transactions` | transaction | Transaction-level fact behind the monthly mart and the semantic layer |
 | `dim_dates` | day | Fixed date spine, 2020 to 2030 (set by project vars): the month spine for the mart and the MetricFlow time spine |
 
+`fct_transactions` deliberately passes `int_transactions_with_revenue` through unchanged. It is the stable, public interface that reports and the semantic layer depend on, so the intermediate models behind it can be split, renamed or rematerialised without breaking anything downstream. It is also materialised as a table, where the intermediate models are views, and on a production warehouse it is the model that would get an enforced contract.
+
 **Every client appears in every month** (January to July 2024), so months without activity still show, and running totals carry forward. July is flagged `is_partial_month`: the data ends on 6 July, and the month contains only refunds and chargeback resolutions, so its recognised revenue is negative.
 
 **Revenue is reported on two bases**, over the same recognised transactions:
