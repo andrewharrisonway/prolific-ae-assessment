@@ -110,27 +110,58 @@ analyses/           naive_threshold_comparison: the naive spend measure, for com
 
 ### Lineage
 
-Each raw table passes through its staging model first (omitted for clarity).
+```mermaid
+flowchart TD
+    subgraph SRC["Sources: raw tables, loaded by dbt seed"]
+        raw_txn[(transactions)]
+        raw_res[(transaction_resolutions)]
+        raw_fx[(currency_rates)]
+        raw_con[(client_contracts)]
+    end
+    subgraph REF["Reference seed"]
+        types[("transaction_types")]
+    end
+    subgraph STG["Staging (views)"]
+        txn["stg_global_transactions__<br/>transactions"]
+        res["stg_global_transactions__<br/>transaction_resolutions"]
+        fx["stg_global_transactions__<br/>currency_rates"]
+        con["stg_global_transactions__<br/>client_contracts"]
+    end
+    subgraph INT["Intermediate (views)"]
+        cls["int_transactions_classified<br/>type behaviour, signs, eligibility"]
+        gbp["int_transactions_converted_to_gbp<br/>exchange-rate lookup"]
+        win["int_client_contracts_windowed<br/>contract end dates"]
+        spd["int_transactions_with_contract_spend<br/>running spend, discount status"]
+        rev["int_transactions_with_revenue<br/>fee margin, recognition date, revenue"]
+    end
+    subgraph MRT["Marts (tables)"]
+        fct[fct_transactions]
+        mon[fct_client_monthly_revenue]
+        dates[dim_dates]
+    end
+    sem{{"semantic layer"}}
 
+    raw_txn --> txn
+    raw_res --> res
+    raw_fx --> fx
+    raw_con --> con
+    types --> cls
+    txn --> cls
+    res --> cls
+    cls --> gbp
+    fx --> gbp
+    gbp --> spd
+    con --> win
+    win --> spd
+    spd --> rev
+    rev --> fct
+    fct --> mon
+    win --> mon
+    dates --> mon
+    fct -.-> sem
 ```
-transactions ─────────────┐
-transaction_resolutions ──┼──► int_transactions_classified
-transaction_types (seed) ─┘                │
-                                           ▼
-currency_rates ───────────────► int_transactions_converted_to_gbp
-                                           │
-                                           ▼
-client_contracts ──► int_client_contracts_windowed ──► int_transactions_with_contract_spend
-                                   │                                 │
-                                   │                                 ▼
-                                   │                   int_transactions_with_revenue
-                                   │                                 │
-                                   │                                 ▼
-                                   │                         fct_transactions
-                                   │                                 │
-                                   └─────────────────────────────────┼──► fct_client_monthly_revenue
-dim_dates (fixed spine, no parents) ─────────────────────────────────┘
-```
+
+Cylinders are tables loaded by `dbt seed` (raw sources, read with `source()`, and reference data, read with `ref()`); rectangles are dbt models; the hexagon is the semantic layer, which defines metrics but builds nothing. Solid arrows are dependencies; the dotted arrow means "defined on". Tests and analyses are omitted.
 
 ## Marts
 
