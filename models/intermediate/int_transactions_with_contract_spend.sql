@@ -89,7 +89,8 @@ effect (on its resolution date) inside the window too.
             txn.spend_effective_date >= cct.contract_start_date
             AND txn.spend_effective_date < cct.contract_end_date
         ) AS is_effective_in_contract_period
-        -- NOTE: null unless this is a refund of a contracted client
+        -- NOTE: null unless this is a refund of a contracted client;
+        -- contract_spend_gbp treats null as qualifying
         , (
             txn.linked_payment_date >= cct.contract_start_date
             AND txn.linked_payment_date < cct.contract_end_date
