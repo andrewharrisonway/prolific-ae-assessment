@@ -298,6 +298,18 @@ SQL style is enforced with SQLFluff (`.sqlfluff`):
 sqlfluff lint models tests analyses
 ```
 
+## How AI was used
+
+I built this project with Claude Code as a pair programmer. The skill in [`.claude/skills/global-transactions-dbt/`](.claude/skills/global-transactions-dbt/SKILL.md) is the brief I gave it: my SQL style, naming, layering and testing conventions, so its output followed the project's standards.
+
+- **What I decided:** the business interpretations and data quality calls (for example, flagging and excluding duplicate refunds, not inferring a client dimension from the transactions, and accepting the exchange-rate effect on refunds), the conventions in the skill, and the scope of what to build.
+- **What the AI did:** drafted and refactored models, tests and documentation to those conventions, profiled the raw data for anomalies, and reviewed the project against dbt best practice.
+- **How I checked its output:**
+  - Every refactor was compared, row for row, against a snapshot of each model's output taken before the change.
+  - The unit tests were mutation-tested: the logic under test was deliberately broken to confirm each test fails.
+  - The project was built from a fresh clone, as CI does, before pushing, and CI runs on every push.
+  - I reviewed every change before committing it, and overrode suggestions that were wrong or over-engineered: for example, a custom duplicate-refund test was replaced with a built-in `unique` test, and a dbt_utils macro that breaks on SQLite was replaced with a plain SQL date spine.
+
 ## Status
 
 - [x] Staging models and tests
